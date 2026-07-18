@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tatami — Suivi des présences</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12161B;
+    --surface: #1B2127;
+    --surface-2: #232A31;
+    --line: rgba(244,240,230,0.10);
+    --ink: #F3EFE5;
+    --ink-dim: #A8AEA0;
+    --tatami: #9CAA6B;
+    --tatami-dim: rgba(156,170,107,0.16);
+    --clay: #B3492F;
+    --clay-dim: rgba(179,73,47,0.16);
+    --radius: 14px;
+  }
+  :root[data-theme="light"]{
+    --bg: #F1ECDF;
+    --surface: #FFFFFF;
+    --surface-2: #F5F1E6;
+    --line: rgba(30,26,18,0.12);
+    --ink: #201C14;
+    --ink-dim: #6B6656;
+    --tatami: #5E7A3E;
+    --tatami-dim: rgba(94,122,62,0.14);
+    --clay: #A23F27;
+    --clay-dim: rgba(162,63,39,0.12);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom: 84px;
+  }
+  h1,h2,h3, .display{
+    font-family:'Big Shoulders Display', system-ui, sans-serif;
+    font-weight:800;
+    letter-spacing:0.01em;
+    text-transform:uppercase;
+  }
+  header.topbar{
+    padding: 22px 18px 14px;
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:10;
+    background: linear-gradient(180deg, var(--bg) 80%, transparent);
+    backdrop-filter: blur(6px);
+  }
+  header.topbar .eyebrow{
+    font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+    color: var(--tatami); font-weight:600;
+  }
+  header.topbar h1{
+    font-size:26px; margin:2px 0 0; line-height:1;
+  }
+  header.topbar input.club-name{
+    background:none; border:none; color:var(--ink);
+    font-family:'Big Shoulders Display', system-ui, sans-serif;
+    font-weight:800; font-size:26px; text-transform:uppercase;
+    letter-spacing:0.01em; flex:1; min-width:0; padding:0; outline:none;
+  }
+  header.topbar input.club-name::placeholder{ color: var(--ink-dim); }
+
+  main{ padding: 16px 16px 8px; max-width:640px; margin:0 auto; }
+  section{ display:none; }
+  section.active{ display:block; animation: fade .18s ease; }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+  .card{
+    background: var(--surface);
+    border:1px solid var(--line);
+    border-radius: var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .card h2{ font-size:15px; margin:0 0 12px; color:var(--ink); }
+  .row{ display:flex; gap:8px; align-items:center; }
+  .row + .row{ margin-top:10px; }
+  label.small{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-dim); display:block; margin-bottom:6px; }
+
+  input[type=text], input[type=date], select{
+    background: var(--surface-2);
+    border:1px solid var(--line);
+    color: var(--ink);
+    border-radius:10px;
+    padding:11px 12px;
+    font-size:15px;
+    font-family:'Inter',sans-serif;
+    width:100%;
+    outline:none;
+  }
+  input[type=text]:focus, input[type=date]:focus, select:focus{ border-color: var(--tatami); }
+
+  button{
+    font-family:'Inter',sans-serif;
+    border:none; cursor:pointer;
+    border-radius:10px;
+    padding:11px 16px;
+    font-size:14px; font-weight:600;
+    background: var(--surface-2);
+    color: var(--ink);
+    transition: transform .08s ease, background .15s ease;
+  }
+  button:active{ transform: scale(0.97); }
+  button.primary{ background: var(--tatami); color:#1A1F14; }
+  button.ghost{ background:transparent; border:1px solid var(--line); }
+  button.danger{ background: var(--clay-dim); color:#F3B7A6; }
+  button:focus-visible{ outline:2px solid var(--tatami); outline-offset:2px; }
+  button.icon-btn{ padding:8px 10px; }
+
+  .empty{
+    color: var(--ink-dim); font-size:14px; line-height:1.5;
+    padding:18px 4px; text-align:left;
+  }
+
+  .group-block{ border-top:1px solid var(--line); padding-top:12px; margin-top:12px; }
+  .group-block:first-of-type{ border-top:none; padding-top:0; margin-top:0; }
+  .group-title-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .group-title-row .name{ font-weight:700; font-size:15px; }
+  .group-title-row .meta{ font-size:12px; color:var(--ink-dim); }
+
+  .member-chip{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 2px; border-bottom:1px solid var(--line); font-size:14px;
+  }
+  .member-chip:last-child{ border-bottom:none; }
+
+  .attend-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 2px; border-bottom:1px solid var(--line);
+  }
+  .attend-row:last-child{ border-bottom:none; }
+  .attend-row .name{ font-size:15px; }
+  .toggle-present{
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink-dim);
+    border-radius:20px; padding:7px 14px; font-size:12.5px; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .toggle-present.on{ background: var(--tatami-dim); border-color: var(--tatami); color: var(--tatami); }
+
+  .session-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 2px; border-bottom:1px solid var(--line); font-size:14px;
+  }
+  .session-row:last-child{ border-bottom:none; }
+  .session-row .date{ font-weight:600; }
+  .session-row .sub{ color:var(--ink-dim); font-size:12.5px; }
+  .session-row .actions{ display:flex; gap:6px; }
+
+  /* Belt bar — signature visual */
+  .beltbar-wrap{ margin-top:6px; }
+  .beltbar{
+    position:relative; height:14px; border-radius:7px; overflow:hidden;
+    display:flex; border:1px solid rgba(0,0,0,0.35);
+  }
+  .beltbar span{ flex:1 1 0; height:100%; }
+  .beltbar .marker{
+    position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--ink);
+    box-shadow:0 0 0 2px var(--bg);
+  }
+  .belt-legend{ display:flex; justify-content:space-between; margin-top:4px; }
+  .belt-legend span{ font-size:10px; color: var(--ink-dim); }
+
+  .stat-line{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px; }
+  .stat-line .who{ font-size:14px; font-weight:600; }
+  .stat-line .pct{ font-family:'Big Shoulders Display', system-ui; font-size:18px; font-weight:700; color:var(--tatami); }
+  .member-stat{ padding:12px 2px; border-bottom:1px solid var(--line); }
+  .member-stat:last-child{ border-bottom:none; }
+  .frac{ font-size:12px; color:var(--ink-dim); }
+
+  .summary-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:6px; }
+  .summary-grid .box{ background:var(--surface-2); border-radius:10px; padding:10px; text-align:center; }
+  .summary-grid .box .n{ font-family:'Big Shoulders Display'; font-size:22px; color:var(--tatami); }
+  .summary-grid .box .l{ font-size:10.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px; }
+
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0;
+    display:flex; background: var(--surface);
+    border-top:1px solid var(--line);
+    padding: 8px max(8px, env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom));
+    z-index:20;
+  }
+  nav.tabbar button{
+    flex:1; background:none; display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:8px 4px; color:var(--ink-dim); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.03em;
+  }
+  nav.tabbar button.active{ color: var(--tatami); }
+  nav.tabbar svg{ width:22px; height:22px; stroke: currentColor; }
+
+  .link-btn{ background:none; color:var(--tatami); padding:6px 0; font-weight:600; font-size:13px; text-decoration:underline; }
+  textarea:focus{ border-color: var(--tatami); outline:none; }
+
+  .band-row{ display:flex; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
+  .band-row:last-child{ border-bottom:none; }
+  .band-row input[type=text]{ flex:2; }
+  .band-row input[type=number]{ flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:9px 6px; text-align:center; width:100%; }
+  .band-row button{ padding:8px 9px; }
+  .tag{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; background:var(--surface-2); color:var(--ink-dim); margin-left:6px; }
+  .tag.warn{ background: var(--clay-dim); color:#F3B7A6; }
+
+  .slot-row{ display:flex; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
+  .slot-row:last-child{ border-bottom:none; }
+  .slot-row select{ flex:1.6; padding:9px 8px; font-size:13.5px; }
+  .slot-row input[type=text]{ flex:1; padding:9px 8px; font-size:13.5px; }
+  .slot-row button{ padding:8px 9px; flex-shrink:0; }
+
+  #certificate-overlay{ display:none; position:fixed; inset:0; background:var(--bg); z-index:100; padding:20px; overflow:auto; }
+  #certificate-overlay.show{ display:block; }
+  .cert-card{ background:var(--surface); border:2px solid var(--tatami); border-radius:18px; padding:32px 22px; text-align:center; max-width:420px; margin:40px auto; }
+  .cert-card .sub{ color:var(--ink-dim); font-size:13px; margin:2px 0 18px; text-transform:none; letter-spacing:normal; font-family:'Inter',sans-serif; font-weight:500; }
+  .cert-card .name{ font-size:26px; margin:16px 0 8px; }
+  .cert-card .stat{ font-size:15px; margin:6px 0 18px; color:var(--ink); font-family:'Inter',sans-serif; font-weight:600; text-transform:none; }
+  .cert-card .stamp{ font-size:11px; color:var(--ink-dim); margin-top:20px; }
+
+  .convoc-row{ display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--line); }
+  .convoc-row:last-child{ border-bottom:none; }
+  .convoc-row .info{ flex:1; }
+  .convoc-row .info .n{ font-size:14px; }
+  .convoc-row .info .e{ font-size:12px; color:var(--ink-dim); }
+  .convoc-row input[type=checkbox]{ width:20px; height:20px; accent-color: var(--tatami); }
+  a.action-link{
+    display:block; text-align:center; text-decoration:none;
+    background: var(--tatami); color:#1A1F14; border-radius:10px; padding:11px 16px;
+    font-size:14px; font-weight:600; margin-top:8px;
+  }
+  a.action-link.ghost{ background:transparent; border:1px solid var(--line); color:var(--ink); }
+
+  @media print{
+    header.topbar, nav.tabbar, #export-card, .settings-foot, #suivi-alerts, .card select, .card input, #tab-groupes, #tab-presences, #tab-convoc{ display:none !important; }
+    body{ background:#fff; color:#000; padding-bottom:0; }
+    .card{ background:#fff; border:1px solid #999; color:#000; }
+    .beltbar{ border-color:#333; }
+    .tatami, .pct{ color:#000 !important; }
+    body.cert-mode main{ display:none !important; }
+    body.cert-mode #certificate-overlay{ position:static; background:#fff; }
+    body.cert-mode .cert-card{ border-color:#333; background:#fff; color:#000; }
+  }
+  .toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    background: var(--surface-2); border:1px solid var(--tatami); color:var(--ink);
+    padding:9px 16px; border-radius:20px; font-size:13px; z-index:50; opacity:0;
+    transition: opacity .25s ease; pointer-events:none;
+  }
+  .toast.show{ opacity:1; }
+  .settings-foot{ text-align:center; margin-top:22px; }
+  .settings-foot button{ font-size:12px; color: var(--ink-dim); background:none; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="eyebrow">Suivi des présences</div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <input class="club-name" id="clubName" placeholder="NOM DU DOJO" maxlength="40">
+    <button id="themeToggle" class="icon-btn ghost" style="flex-shrink:0; font-size:16px;" aria-label="Changer de thème">☀️</button>
+  </div>
+</header>
+
+<main>
+  <section id="tab-presences">
+    <div class="card" id="presence-setup"></div>
+    <div class="card" id="presence-sheet" style="display:none;"></div>
+    <div class="card" id="presence-history"></div>
+  </section>
+
+  <section id="tab-groupes">
+    <div class="card">
+      <h2>Nouveau cours</h2>
+      <div class="row">
+        <input type="text" id="newGroupName" placeholder="Ex. Judo — Mini-poussins">
+        <button class="primary" id="addGroupBtn">Ajouter</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Importer un classeur à plusieurs cours</h2>
+      <p style="font-size:13px; color:var(--ink-dim); margin:0 0 12px; line-height:1.5;">Un fichier Excel avec plusieurs onglets (un onglet = un cours). Chaque onglet doit contenir des colonnes NOM, PRENOM et une colonne de date de naissance.</p>
+      <button class="ghost" id="importWorkbookBtn" style="width:100%;">Choisir un fichier (.xlsx, .xls)</button>
+    </div>
+    <div class="card" id="groups-list"></div>
+    <div class="card" id="age-settings"></div>
+    <div class="card" id="backend-settings"></div>
+  </section>
+
+  <section id="tab-suivi">
+    <div class="card">
+      <div class="row">
+        <div style="flex:1">
+          <label class="small">Année</label>
+          <select id="suiviYear"></select>
+        </div>
+        <div style="flex:1">
+          <label class="small">Cours</label>
+          <select id="suiviGroup"></select>
+        </div>
+      </div>
+    </div>
+    <div id="suivi-alerts"></div>
+    <div id="suivi-content"></div>
+    <div class="card" id="export-card"></div>
+  </section>
+
+  <section id="tab-convoc">
+    <div class="card">
+      <h2>Convoquer</h2>
+      <div class="row">
+        <input type="text" id="convocTitre" placeholder="Ex. Tournoi de Créteil">
+      </div>
+      <div class="row">
+        <input type="date" id="convocDate">
+        <input type="text" id="convocHeure" placeholder="Heure de RDV, ex. 9h30">
+      </div>
+      <div class="row">
+        <input type="text" id="convocLieu" placeholder="Lieu">
+      </div>
+      <div class="row">
+        <textarea id="convocConsignes" placeholder="Consignes (kimono, licence, repas...)" style="width:100%; min-height:70px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:11px 12px; color:var(--ink); font-family:'Inter',sans-serif; font-size:15px; resize:vertical;"></textarea>
+      </div>
+      <div class="row">
+        <div style="flex:1">
+          <label class="small">Cours concerné</label>
+          <select id="convocGroupSel"></select>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="convoc-members"></div>
+    <div class="card" id="convoc-actions"></div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button data-tab="presences" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    Présences
+  </button>
+  <button data-tab="groupes">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2"/><circle cx="17" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+    Cours
+  </button>
+  <button data-tab="suivi">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
+    Suivi annuel
+  </button>
+  <button data-tab="convoc">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+    Convoc.
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<div id="certificate-overlay"></div>
+<input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const BELTS = [
+  {c:'#EFEAD9', l:'Blanche'},
+  {c:'#E8C547', l:'Jaune'},
+  {c:'#E08A3C', l:'Orange'},
+  {c:'#4C8C4A', l:'Verte'},
+  {c:'#3B6EA5', l:'Bleue'},
+  {c:'#6B4A34', l:'Marron'},
+  {c:'#1A1A1A', l:'Noire'}
+];
+
+let data = { clubName:'', groups:[], members:[], sessions:[], attendance:{}, settings:{} };
+let ui = { activeTab:'presences', presenceGroup:null, presenceSessionId:null, groupsMemberDraft:{}, convocGroup:'all', convocChecked:{} };
+let ready = false;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(s){
+  const d = new Date(s+'T00:00:00');
+  return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+}
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+/* ---------------- CATÉGORIES D'ÂGE ---------------- */
+function defaultAgeBands(){
+  return [
+    { label:'Baby Judo/Karaté', minAge:4, maxAge:5 },
+    { label:'Poussinets', minAge:6, maxAge:7 },
+    { label:'Poussins', minAge:8, maxAge:9 },
+    { label:'Benjamins', minAge:10, maxAge:11 },
+    { label:'Minimes', minAge:12, maxAge:13 },
+    { label:'Cadets', minAge:14, maxAge:16 },
+    { label:'Juniors', minAge:17, maxAge:19 },
+    { label:'Seniors', minAge:20, maxAge:99 }
+  ];
+}
+function autoSeasonStartYear(){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth()+1; // 1-12
+  if(m>=6) return y;      // juin à décembre -> saison qui commence cette année (anticipation dès l'été)
+  return y-1;             // janvier à mai -> la saison en cours a commencé l'année précédente
+}
+function ensureSettings(){
+  data.settings ||= {};
+  if(!data.settings.ageBands || !data.settings.ageBands.length) data.settings.ageBands = defaultAgeBands();
+  if(!data.settings.seasonStartYear) data.settings.seasonStartYear = autoSeasonStartYear();
+  if(!data.settings.theme) data.settings.theme = 'dark';
+  data.groups.forEach(g=>{ g.recurrence ||= []; });
+}
+function computeCategory(birthDate){
+  if(!birthDate) return null;
+  const birthYear = parseInt(birthDate.slice(0,4), 10);
+  if(!birthYear) return null;
+  const age = data.settings.seasonStartYear - birthYear;
+  const band = (data.settings.ageBands||[]).find(b=>age>=b.minAge && age<=b.maxAge);
+  if(!band) return null;
+  const span = band.maxAge - band.minAge + 1;
+  if(span<=1) return band.label;
+  const suffix = age - band.minAge + 1;
+  return `${band.label} ${suffix}`;
+}
+function memberAge(birthDate){
+  if(!birthDate) return null;
+  const birthYear = parseInt(birthDate.slice(0,4), 10);
+  if(!birthYear) return null;
+  return data.settings.seasonStartYear - birthYear;
+}
+
+/* ---------------- CRÉNEAUX RÉCURRENTS ---------------- */
+const WEEKDAYS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+function isoWeekday(dateStr){
+  const jsDay = new Date(dateStr+'T00:00:00').getDay();
+  return jsDay===0 ? 7 : jsDay;
+}
+function matchingSlotTime(group, dateStr){
+  const slot = (group.recurrence||[]).find(r=>r.weekday===isoWeekday(dateStr));
+  return slot ? `${slot.start}–${slot.end}` : '';
+}
+function addMonths(dateStr, n){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+function generateSessions(groupId, startDate, endDate){
+  const group = data.groups.find(g=>g.id===groupId);
+  if(!group || !(group.recurrence||[]).length) return { created:0 };
+  const existing = new Set(data.sessions.filter(s=>s.groupId===groupId).map(s=>s.date));
+  let created = 0;
+  let cur = new Date(startDate+'T00:00:00');
+  const end = new Date(endDate+'T00:00:00');
+  while(cur<=end){
+    const dateStr = cur.toISOString().slice(0,10);
+    const time = matchingSlotTime(group, dateStr);
+    if(time && !existing.has(dateStr)){
+      const sessionObj = { id: uid(), groupId, date: dateStr, time };
+      data.sessions.push(sessionObj);
+      data.attendance[sessionObj.id] = {};
+      existing.add(dateStr);
+      created++;
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  return { created };
+}
+function sessionHasRollCall(sessionId){
+  const att = data.attendance[sessionId] || {};
+  return Object.values(att).some(v=>v===true);
+}
+
+function getBackendConfig(){
+  try{ return JSON.parse(localStorage.getItem('dojo-backend-config')||'null'); }catch(e){ return null; }
+}
+function setBackendConfig(cfg){
+  localStorage.setItem('dojo-backend-config', JSON.stringify(cfg));
+}
+
+async function loadData(){
+  const cfg = getBackendConfig();
+  let loadedFromBackend = false;
+  if(cfg && cfg.url && cfg.key){
+    try{
+      const res = await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}`);
+      const json = await res.json();
+      if(json && !json.error){
+        data = json;
+        data.groups ||= []; data.members ||= []; data.sessions ||= []; data.attendance ||= {};
+        loadedFromBackend = true;
+      } else {
+        showToast('Connexion au classeur refusée — vérifie la clé');
+      }
+    }catch(e){
+      showToast('Classeur inaccessible — mode local pour cette fois');
+    }
+  }
+  if(!loadedFromBackend){
+    try{
+      const raw = localStorage.getItem('dojo-data');
+      if(raw){
+        data = JSON.parse(raw);
+        data.groups ||= []; data.members ||= []; data.sessions ||= []; data.attendance ||= {};
+      }
+    }catch(e){
+      // pas encore de données enregistrées, ou stockage indisponible — on démarre avec une ardoise vierge
+    }
+  }
+  ensureSettings();
+  document.documentElement.setAttribute('data-theme', data.settings.theme);
+  document.getElementById('themeToggle').textContent = data.settings.theme==='light' ? '🌙' : '☀️';
+  ready = true;
+  document.getElementById('clubName').value = data.clubName || '';
+  renderAll();
+}
+async function saveData(){
+  try{
+    localStorage.setItem('dojo-data', JSON.stringify(data));
+  }catch(e){
+    showToast("Échec de l'enregistrement sur cet appareil");
+  }
+  const cfg = getBackendConfig();
+  if(!cfg || !cfg.url || !cfg.key) return;
+  try{
+    await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}`, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify(data)
+    });
+  }catch(e){
+    showToast('Sauvegarde en ligne impossible — gardée en local seulement');
+  }
+}
+
+function switchTab(tab){
+  ui.activeTab = tab;
+  document.querySelectorAll('nav.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active', s.id==='tab-'+tab));
+  renderAll();
+}
+document.querySelectorAll('nav.tabbar button').forEach(b=>b.addEventListener('click', ()=>switchTab(b.dataset.tab)));
+document.getElementById('tab-presences').classList.add('active');
+
+document.getElementById('clubName').addEventListener('input', e=>{
+  data.clubName = e.target.value; saveData();
+});
+
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const next = data.settings.theme==='light' ? 'dark' : 'light';
+  data.settings.theme = next;
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeToggle').textContent = next==='light' ? '🌙' : '☀️';
+  saveData();
+});
+
+function renderAll(){
+  if(!ready) return;
+  renderGroupsTab();
+  renderAgeSettings();
+  renderBackendSettings();
+  renderPresencesTab();
+  renderSuiviTab();
+  renderSuiviAlerts();
+  renderExportCard();
+  renderConvocTab();
+}
+
+/* ---------------- GROUPES ---------------- */
+document.getElementById('addGroupBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newGroupName');
+  const name = input.value.trim();
+  if(!name) return;
+  data.groups.push({ id: uid(), name, recurrence:[] });
+  input.value = '';
+  saveData(); renderAll();
+  showToast('Cours ajouté');
+});
+
+document.getElementById('importWorkbookBtn').addEventListener('click', ()=>{
+  ui.importMode = 'workbook';
+  ui.importTargetGroup = null;
+  document.getElementById('importFileInput').click();
+});
+
+function renderGroupsTab(){
+  const wrap = document.getElementById('groups-list');
+  if(data.groups.length===0){
+    wrap.innerHTML = `<div class="empty">Aucun cours pour l'instant. Ajoutez votre premier cours ci-dessus — par exemple « Judo débutants » ou « Karaté ados ».</div>`;
+    return;
+  }
+  wrap.innerHTML = data.groups.map(g=>{
+    const members = data.members.filter(m=>m.groupId===g.id);
+    const draftId = 'draft-'+g.id;
+    return `
+    <div class="group-block" data-group="${g.id}">
+      <div class="group-title-row">
+        <div>
+          <div class="name">${escapeHtml(g.name)}</div>
+          <div class="meta">${members.length} pratiquant${members.length===1?'':'s'}</div>
+        </div>
+        <button class="danger icon-btn" data-action="del-group" data-id="${g.id}">Supprimer</button>
+      </div>
+      ${members.map(m=>{
+        const cat = computeCategory(m.birthDate);
+        return `
+        <div class="member-chip" style="align-items:flex-start; flex-direction:column; gap:6px;">
+          <div style="display:flex; justify-content:space-between; width:100%;">
+            <span>${escapeHtml(m.name)}${cat ? `<span class="tag">${escapeHtml(cat)}</span>` : ''}${m.birthDate ? `<br><span style="color:var(--ink-dim); font-size:12px;">né(e) le ${fmtDate(m.birthDate)}</span>` : ''}</span>
+            <button class="ghost icon-btn" data-action="del-member" data-id="${m.id}">Retirer</button>
+          </div>
+          <input type="text" data-action="edit-email" data-id="${m.id}" value="${escapeHtml(m.email||'')}" placeholder="Email (pour convocations)" style="font-size:13px; padding:8px 10px;">
+        </div>`;
+      }).join('') || '<div class="empty" style="padding:10px 2px;">Aucun membre pour ce cours.</div>'}
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="${draftId}" placeholder="Nom du pratiquant">
+        <button data-action="add-member" data-id="${g.id}" data-input="${draftId}">Ajouter</button>
+      </div>
+      <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="import" data-id="${g.id}">Importer une liste (Excel/CSV)</button>
+
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--line);">
+        <label class="small">Créneaux hebdomadaires</label>
+        ${(g.recurrence||[]).map((r,i)=>`
+          <div class="slot-row" data-group="${g.id}" data-idx="${i}">
+            <select data-recur="weekday">
+              ${WEEKDAYS.map((w,wi)=>`<option value="${wi+1}" ${r.weekday===wi+1?'selected':''}>${w}</option>`).join('')}
+            </select>
+            <input type="text" data-recur="start" value="${escapeHtml(r.start||'')}" placeholder="17h15">
+            <input type="text" data-recur="end" value="${escapeHtml(r.end||'')}" placeholder="18h15">
+            <button class="ghost icon-btn" data-action="del-recur" data-group="${g.id}" data-idx="${i}">✕</button>
+          </div>`).join('') || '<div class="empty" style="padding:6px 2px; font-size:13px;">Aucun créneau défini.</div>'}
+        <button class="ghost icon-btn" data-action="add-recur" data-id="${g.id}" style="margin-top:8px; width:100%;">Ajouter un créneau</button>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label class="small">Générer les séances de ce cours</label>
+        <div class="row">
+          <input type="date" data-role="genStart" data-group="${g.id}" value="${todayStr()}">
+          <input type="date" data-role="genEnd" data-group="${g.id}" value="${addMonths(todayStr(),3)}">
+        </div>
+        <button class="primary" data-action="generate" data-id="${g.id}" style="width:100%; margin-top:8px;">Générer les séances</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('groups-list').addEventListener('click', e=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const action = btn.dataset.action;
+  if(action==='del-group'){
+    const g = data.groups.find(x=>x.id===btn.dataset.id);
+    if(!confirm(`Supprimer le cours « ${g.name} » ainsi que ses membres et ses séances ?`)) return;
+    const gid = btn.dataset.id;
+    const sessionIds = data.sessions.filter(s=>s.groupId===gid).map(s=>s.id);
+    data.groups = data.groups.filter(x=>x.id!==gid);
+    data.members = data.members.filter(x=>x.groupId!==gid);
+    data.sessions = data.sessions.filter(x=>x.groupId!==gid);
+    sessionIds.forEach(id=>delete data.attendance[id]);
+    saveData(); renderAll();
+  } else if(action==='del-member'){
+    if(!confirm('Retirer ce pratiquant du cours ?')) return;
+    data.members = data.members.filter(x=>x.id!==btn.dataset.id);
+    saveData(); renderAll();
+  } else if(action==='add-member'){
+    const input = document.getElementById(btn.dataset.input);
+    const name = input.value.trim();
+    if(!name) return;
+    data.members.push({ id: uid(), groupId: btn.dataset.id, name });
+    saveData(); renderAll();
+  } else if(action==='import'){
+    ui.importMode = 'single';
+    ui.importTargetGroup = btn.dataset.id;
+    document.getElementById('importFileInput').click();
+  } else if(action==='add-recur'){
+    const g = data.groups.find(x=>x.id===btn.dataset.id);
+    g.recurrence = g.recurrence || [];
+    g.recurrence.push({ weekday:1, start:'', end:'' });
+    saveData(); renderAll();
+  } else if(action==='del-recur'){
+    const g = data.groups.find(x=>x.id===btn.dataset.group);
+    g.recurrence.splice(parseInt(btn.dataset.idx,10),1);
+    saveData(); renderAll();
+  } else if(action==='generate'){
+    const gid = btn.dataset.id;
+    const g = data.groups.find(x=>x.id===gid);
+    if(!g || !(g.recurrence||[]).length){ showToast('Ajoute au moins un créneau avant de générer'); return; }
+    const startInput = document.querySelector(`[data-role="genStart"][data-group="${gid}"]`);
+    const endInput = document.querySelector(`[data-role="genEnd"][data-group="${gid}"]`);
+    const startDate = startInput.value || todayStr();
+    const endDate = endInput.value;
+    if(!endDate){ showToast('Choisis une date de fin'); return; }
+    const { created } = generateSessions(gid, startDate, endDate);
+    saveData(); renderAll();
+    showToast(created ? `${created} séance${created===1?'':'s'} générée${created===1?'':'s'}` : 'Aucune nouvelle séance (déjà existantes ou aucun jour ne correspond)');
+  }
+});
+
+document.getElementById('groups-list').addEventListener('change', e=>{
+  const recurField = e.target.closest('[data-recur]');
+  if(recurField){
+    const row = recurField.closest('[data-idx][data-group]');
+    const g = data.groups.find(x=>x.id===row.dataset.group);
+    if(!g) return;
+    const idx = parseInt(row.dataset.idx,10);
+    const key = recurField.dataset.recur;
+    g.recurrence[idx][key] = key==='weekday' ? parseInt(recurField.value,10) : recurField.value.trim();
+    saveData();
+    return;
+  }
+  const input = e.target.closest('[data-action="edit-email"]');
+  if(!input) return;
+  const m = data.members.find(x=>x.id===input.dataset.id);
+  if(!m) return;
+  m.email = input.value.trim();
+  saveData();
+});
+
+/* ---------------- RÉGLAGES CATÉGORIES D'ÂGE ---------------- */
+function renderAgeSettings(){
+  const wrap = document.getElementById('age-settings');
+  const bands = data.settings.ageBands;
+  wrap.innerHTML = `
+    <h2>Catégories d'âge</h2>
+    <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">Calculées à partir de la date de naissance. Ce sont des repères courants en judo/karaté — ajuste-les si ta fédération retient d'autres tranches.</p>
+    <div class="row">
+      <div style="flex:1">
+        <label class="small">Saison — année de rentrée (ex. 2026 pour 2026-2027)</label>
+        <input type="number" id="seasonStartYear" value="${data.settings.seasonStartYear}">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      ${bands.map((b,i)=>`
+        <div class="band-row" data-idx="${i}">
+          <input type="text" data-field="label" value="${escapeHtml(b.label)}">
+          <input type="number" data-field="minAge" value="${b.minAge}">
+          <span style="color:var(--ink-dim); font-size:12px;">à</span>
+          <input type="number" data-field="maxAge" value="${b.maxAge}">
+          <button class="ghost icon-btn" data-action="del-band" data-idx="${i}">✕</button>
+        </div>`).join('')}
+    </div>
+    <button class="ghost" id="addBandBtn" style="width:100%; margin-top:10px;">Ajouter une tranche</button>
+  `;
+  document.getElementById('seasonStartYear').addEventListener('change', e=>{
+    const v = parseInt(e.target.value,10);
+    if(v){ data.settings.seasonStartYear = v; saveData(); renderAll(); }
+  });
+  wrap.querySelectorAll('.band-row input').forEach(inp=>{
+    inp.addEventListener('change', e=>{
+      const row = e.target.closest('.band-row');
+      const idx = parseInt(row.dataset.idx,10);
+      const field = e.target.dataset.field;
+      bands[idx][field] = field==='label' ? e.target.value.trim() : (parseInt(e.target.value,10)||0);
+      saveData(); renderAll();
+    });
+  });
+  wrap.querySelectorAll('[data-action="del-band"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      bands.splice(parseInt(btn.dataset.idx,10),1);
+      saveData(); renderAll();
+    });
+  });
+  document.getElementById('addBandBtn').addEventListener('click', ()=>{
+    bands.push({ label:'Nouvelle catégorie', minAge:0, maxAge:0 });
+    saveData(); renderAll();
+  });
+}
+
+/* ---------------- CONNEXION GOOGLE SHEETS ---------------- */
+function renderBackendSettings(){
+  const wrap = document.getElementById('backend-settings');
+  if(!wrap) return;
+  const cfg = getBackendConfig() || { url:'', key:'' };
+  wrap.innerHTML = `
+    <h2>Classeur Google Sheets (optionnel)</h2>
+    <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">Connecte l'app à un classeur Google Sheets pour partager les données entre plusieurs appareils. Sans connexion, tout reste enregistré uniquement sur ce téléphone.</p>
+    <div class="row">
+      <input type="text" id="backendUrl" placeholder="URL du script (…/exec)" value="${escapeHtml(cfg.url||'')}">
+    </div>
+    <div class="row">
+      <input type="text" id="backendKey" placeholder="Clé secrète" value="${escapeHtml(cfg.key||'')}">
+    </div>
+    <button class="ghost" id="saveBackendBtn" style="width:100%; margin-top:8px;">Enregistrer la connexion</button>
+    <button class="primary" id="pushBackendBtn" style="width:100%; margin-top:8px;">Envoyer mes données actuelles vers le classeur</button>
+    <button class="ghost" id="pullBackendBtn" style="width:100%; margin-top:8px;">Charger les données du classeur (remplace celles de ce téléphone)</button>
+    ${cfg.url ? `<button class="ghost icon-btn" id="disconnectBackendBtn" style="width:100%; margin-top:8px; color:var(--clay);">Se déconnecter (repasser en local)</button>` : ''}
+  `;
+  document.getElementById('saveBackendBtn').addEventListener('click', ()=>{
+    const url = document.getElementById('backendUrl').value.trim();
+    const key = document.getElementById('backendKey').value.trim();
+    if(!url || !key){ showToast('Renseigne l\u2019URL et la clé'); return; }
+    setBackendConfig({ url, key });
+    showToast('Connexion enregistrée');
+    renderAll();
+  });
+  document.getElementById('pushBackendBtn').addEventListener('click', async ()=>{
+    const url = document.getElementById('backendUrl').value.trim();
+    const key = document.getElementById('backendKey').value.trim();
+    if(!url || !key){ showToast('Renseigne l\u2019URL et la clé'); return; }
+    setBackendConfig({ url, key });
+    try{
+      const res = await fetch(`${url}?key=${encodeURIComponent(key)}`, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json();
+      showToast(json && json.ok ? 'Données envoyées vers le classeur' : 'Le classeur a refusé l\u2019envoi — vérifie la clé');
+    }catch(e){
+      showToast('Impossible de contacter le classeur');
+    }
+  });
+  document.getElementById('pullBackendBtn').addEventListener('click', async ()=>{
+    const url = document.getElementById('backendUrl').value.trim();
+    const key = document.getElementById('backendKey').value.trim();
+    if(!url || !key){ showToast('Renseigne l\u2019URL et la clé'); return; }
+    if(!confirm('Ceci remplace toutes les données de ce téléphone par celles du classeur. Continuer ?')) return;
+    setBackendConfig({ url, key });
+    await loadData();
+    showToast('Données chargées depuis le classeur');
+  });
+  const disconnectBtn = document.getElementById('disconnectBackendBtn');
+  if(disconnectBtn){
+    disconnectBtn.addEventListener('click', ()=>{
+      if(!confirm('Se déconnecter du classeur ? Les données resteront enregistrées localement sur ce téléphone.')) return;
+      localStorage.removeItem('dojo-backend-config');
+      showToast('Déconnecté — mode local');
+      renderAll();
+    });
+  }
+}
+
+
+const HEADER_WORDS = ['nom','prénom','prenom','nom complet','élève','eleve','élèves','eleves','liste','judoka','judokas','karateka','karatekas','membre','membres','athlete','athlète','athletes','athlètes','name','pratiquant','pratiquants'];
+
+function rowToName(row){
+  return row.map(c=>String(c===undefined||c===null?'':c).trim()).filter(Boolean).join(' ').trim();
+}
+function looksLikeHeader(name){
+  const low = name.toLowerCase();
+  return HEADER_WORDS.some(w=> low===w || low.split(/\s+/).includes(w));
+}
+function toTitleCase(s){
+  return String(s||'').trim().toLowerCase().replace(/(^|[\s\-'])([a-zàâäéèêëïîôöùûüç])/g, (m,sep,c)=>sep+c.toUpperCase());
+}
+function parseBirthCell(v){
+  if(v instanceof Date && !isNaN(v)){
+    const y=v.getFullYear(), m=String(v.getMonth()+1).padStart(2,'0'), d=String(v.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(v===undefined||v===null?'':v).trim();
+  if(!s) return '';
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(m){
+    let [,d,mo,y] = m;
+    if(y.length===2) y = (parseInt(y,10)>30?'19':'20')+y;
+    return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m){ const [,y,mo,d]=m; return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
+  return '';
+}
+
+function importSingleList(wb, groupId){
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:false, defval:'' });
+  let names = rows.map(rowToName).filter(Boolean);
+  if(names.length && looksLikeHeader(names[0])) names = names.slice(1);
+  if(names.length === 0){ showToast('Aucun nom trouvé dans ce fichier'); return; }
+  const existing = new Set(data.members.filter(m=>m.groupId===groupId).map(m=>m.name.toLowerCase()));
+  const seen = new Set();
+  let added = 0, skipped = 0;
+  names.forEach(name=>{
+    const key = name.toLowerCase();
+    if(existing.has(key) || seen.has(key)){ skipped++; return; }
+    seen.add(key);
+    data.members.push({ id: uid(), groupId, name });
+    added++;
+  });
+  saveData(); renderAll();
+  showToast(`${added} ajouté${added===1?'':'s'}` + (skipped ? `, ${skipped} doublon${skipped===1?'':'s'} ignoré${skipped===1?'':'s'}` : ''));
+}
+
+function importWorkbookMultiSheet(wb){
+  let groupsCreated = 0, totalAdded = 0, totalSkipped = 0, sheetsIgnored = 0;
+  wb.SheetNames.forEach(sheetName=>{
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:true, defval:'' });
+    let headerIdx=-1, colNom=-1, colPrenom=-1, colDate=-1;
+    for(let i=0;i<rows.length;i++){
+      const row = rows[i].map(c=>String(c===undefined||c===null?'':c).trim().toLowerCase());
+      const nomIdx = row.findIndex(c=>c==='nom');
+      const prenomIdx = row.findIndex(c=>c==='prenom' || c==='prénom');
+      if(nomIdx>-1 && prenomIdx>-1){
+        headerIdx=i; colNom=nomIdx; colPrenom=prenomIdx;
+        colDate = row.findIndex(c=>c.includes('né') || c.includes('ne le') || c.includes('naissance'));
+        break;
+      }
+    }
+    if(headerIdx===-1){ sheetsIgnored++; return; }
+
+    let group = data.groups.find(g=>g.name.toLowerCase()===sheetName.trim().toLowerCase());
+    if(!group){
+      group = { id: uid(), name: toTitleCase(sheetName.trim()), recurrence:[] };
+      data.groups.push(group);
+      groupsCreated++;
+    }
+    const existing = new Set(data.members.filter(m=>m.groupId===group.id).map(m=>m.name.toLowerCase()));
+    const seen = new Set();
+    for(let i=headerIdx+1;i<rows.length;i++){
+      const row = rows[i];
+      const nom = toTitleCase(row[colNom]);
+      const prenom = colPrenom>-1 ? toTitleCase(row[colPrenom]) : '';
+      const fullName = [prenom, nom].filter(Boolean).join(' ').trim();
+      if(!fullName) continue;
+      const key = fullName.toLowerCase();
+      if(existing.has(key) || seen.has(key)){ totalSkipped++; continue; }
+      seen.add(key);
+      const birthDate = colDate>-1 ? parseBirthCell(row[colDate]) : '';
+      data.members.push({ id: uid(), groupId: group.id, name: fullName, birthDate });
+      totalAdded++;
+    }
+  });
+  saveData(); renderAll();
+  if(groupsCreated===0 && totalAdded===0){
+    showToast(sheetsIgnored ? "Aucune colonne NOM/PRENOM détectée dans ce fichier" : 'Aucune donnée trouvée');
+    return;
+  }
+  showToast(`${groupsCreated} cours créé${groupsCreated===1?'':'s'}, ${totalAdded} pratiquant${totalAdded===1?'':'s'} ajouté${totalAdded===1?'':'s'}` + (totalSkipped ? `, ${totalSkipped} doublon${totalSkipped===1?'':'s'} ignoré${totalSkipped===1?'':'s'}` : ''));
+}
+
+document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const mode = ui.importMode;
+  const groupId = ui.importTargetGroup;
+  e.target.value = '';
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    showToast("La lecture de fichiers n'a pas pu se charger — vérifiez la connexion");
+    return;
+  }
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array', cellDates:true });
+    if(mode==='workbook'){
+      importWorkbookMultiSheet(wb);
+    } else if(groupId){
+      importSingleList(wb, groupId);
+    }
+  }catch(err){
+    showToast('Impossible de lire ce fichier');
+  }finally{
+    ui.importTargetGroup = null;
+    ui.importMode = null;
+  }
+});
+
+/* ---------------- PRÉSENCES ---------------- */
+function renderPresencesTab(){
+  const setup = document.getElementById('presence-setup');
+  if(data.groups.length===0){
+    setup.innerHTML = `<div class="empty">Créez d'abord un cours dans l'onglet « Cours » pour pouvoir faire l'appel.</div>`;
+    document.getElementById('presence-sheet').style.display='none';
+    document.getElementById('presence-history').innerHTML='';
+    return;
+  }
+  if(!ui.presenceGroup || !data.groups.find(g=>g.id===ui.presenceGroup)){
+    ui.presenceGroup = data.groups[0].id;
+  }
+  setup.innerHTML = `
+    <h2>Faire l'appel</h2>
+    <div class="row">
+      <div style="flex:1">
+        <label class="small">Cours</label>
+        <select id="presenceGroupSel">
+          ${data.groups.map(g=>`<option value="${g.id}" ${g.id===ui.presenceGroup?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1">
+        <label class="small">Date</label>
+        <input type="date" id="presenceDate" value="${todayStr()}">
+      </div>
+    </div>
+    <button class="primary" id="openSessionBtn" style="margin-top:12px; width:100%;">Ouvrir la séance</button>
+  `;
+  document.getElementById('presenceGroupSel').addEventListener('change', e=>{
+    ui.presenceGroup = e.target.value; ui.presenceSessionId = null;
+    document.getElementById('presence-sheet').style.display='none';
+    renderPresenceHistory();
+  });
+  document.getElementById('openSessionBtn').addEventListener('click', ()=>{
+    const date = document.getElementById('presenceDate').value || todayStr();
+    let session = data.sessions.find(s=>s.groupId===ui.presenceGroup && s.date===date);
+    if(!session){
+      const g = data.groups.find(x=>x.id===ui.presenceGroup);
+      session = { id: uid(), groupId: ui.presenceGroup, date, time: g ? matchingSlotTime(g, date) : '' };
+      data.sessions.push(session);
+      data.attendance[session.id] = {};
+      saveData();
+    }
+    ui.presenceSessionId = session.id;
+    renderPresenceSheet();
+    renderPresenceHistory();
+  });
+  renderPresenceHistory();
+  if(ui.presenceSessionId){ renderPresenceSheet(); } else { document.getElementById('presence-sheet').style.display='none'; }
+}
+
+function renderPresenceSheet(){
+  const sheet = document.getElementById('presence-sheet');
+  const session = data.sessions.find(s=>s.id===ui.presenceSessionId);
+  if(!session){ sheet.style.display='none'; return; }
+  const members = data.members.filter(m=>m.groupId===session.groupId);
+  const att = data.attendance[session.id] || (data.attendance[session.id]={});
+  sheet.style.display='block';
+  const present = members.filter(m=>att[m.id]).length;
+  sheet.innerHTML = `
+    <h2>${fmtDate(session.date)}${session.time?' · '+session.time:''} — ${present}/${members.length} présent${present===1?'':'s'}</h2>
+    ${members.length===0 ? '<div class="empty">Ajoutez des pratiquants à ce cours dans l’onglet « Cours ».</div>' :
+      members.map(m=>`
+        <div class="attend-row">
+          <span class="name">${escapeHtml(m.name)}</span>
+          <button class="toggle-present ${att[m.id]?'on':''}" data-member="${m.id}">${att[m.id]?'Présent':'Absent'}</button>
+        </div>`).join('')}
+    <button class="danger" id="deleteSessionBtn" style="margin-top:14px; width:100%;">Supprimer cette séance</button>
+  `;
+  sheet.querySelectorAll('[data-member]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mid = btn.dataset.member;
+      att[mid] = !att[mid];
+      saveData();
+      renderPresenceSheet();
+      renderPresenceHistory();
+    });
+  });
+  document.getElementById('deleteSessionBtn').addEventListener('click', ()=>{
+    if(!confirm('Supprimer cette séance et les présences associées ?')) return;
+    data.sessions = data.sessions.filter(s=>s.id!==session.id);
+    delete data.attendance[session.id];
+    ui.presenceSessionId = null;
+    saveData(); renderPresencesTab();
+  });
+}
+
+function renderPresenceHistory(){
+  const wrap = document.getElementById('presence-history');
+  const sessions = data.sessions.filter(s=>s.groupId===ui.presenceGroup).sort((a,b)=>b.date.localeCompare(a.date));
+  if(sessions.length===0){ wrap.innerHTML = `<h2>Séances passées</h2><div class="empty">Aucune séance enregistrée pour ce cours.</div>`; return; }
+  wrap.innerHTML = `<h2>Séances passées</h2>` + sessions.map(s=>{
+    const members = data.members.filter(m=>m.groupId===s.groupId);
+    const att = data.attendance[s.id] || {};
+    const present = members.filter(m=>att[m.id]).length;
+    return `
+    <div class="session-row">
+      <div>
+        <div class="date">${fmtDate(s.date)}${s.time?' · '+s.time:''}</div>
+        <div class="sub">${present}/${members.length} présents</div>
+      </div>
+      <div class="actions">
+        <button class="ghost icon-btn" data-open="${s.id}">Ouvrir</button>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-open]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      ui.presenceSessionId = btn.dataset.open;
+      renderPresenceSheet();
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+  });
+}
+
+/* ---------------- SUIVI ANNUEL ---------------- */
+function yearsAvailable(){
+  const ys = new Set(data.sessions.map(s=>s.date.slice(0,4)));
+  ys.add(String(new Date().getFullYear()));
+  return Array.from(ys).sort((a,b)=>b-a);
+}
+
+function renderSuiviTab(){
+  const yearSel = document.getElementById('suiviYear');
+  const groupSel = document.getElementById('suiviGroup');
+  const years = yearsAvailable();
+  const prevYear = yearSel.value;
+  yearSel.innerHTML = years.map(y=>`<option value="${y}">${y}</option>`).join('');
+  if(years.includes(prevYear)) yearSel.value = prevYear;
+
+  const prevGroup = groupSel.value;
+  groupSel.innerHTML = `<option value="all">Tous les cours</option>` + data.groups.map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+  if([...groupSel.options].some(o=>o.value===prevGroup)) groupSel.value = prevGroup;
+
+  yearSel.onchange = renderSuiviContent;
+  groupSel.onchange = renderSuiviContent;
+  renderSuiviContent();
+}
+
+function beltBarHtml(pct){
+  const clamped = Math.max(0, Math.min(100, pct));
+  return `
+    <div class="beltbar-wrap">
+      <div class="beltbar">
+        ${BELTS.map(b=>`<span style="background:${b.c}"></span>`).join('')}
+        <div class="marker" style="left:${clamped}%"></div>
+      </div>
+    </div>`;
+}
+
+function renderSuiviContent(){
+  const wrap = document.getElementById('suivi-content');
+  const year = document.getElementById('suiviYear').value;
+  const groupFilter = document.getElementById('suiviGroup').value;
+  if(data.groups.length===0){
+    wrap.innerHTML = `<div class="card"><div class="empty">Ajoutez un cours et faites l'appel à quelques séances pour voir apparaître le suivi ici.</div></div>`;
+    return;
+  }
+  const groups = groupFilter==='all' ? data.groups : data.groups.filter(g=>g.id===groupFilter);
+
+  wrap.innerHTML = groups.map(g=>{
+    const sessions = data.sessions.filter(s=>s.groupId===g.id && s.date.slice(0,4)===year && sessionHasRollCall(s.id));
+    const members = data.members.filter(m=>m.groupId===g.id);
+    const totalSlots = sessions.length * (members.length||1);
+    let totalPresent = 0;
+    const memberRows = members.map(m=>{
+      const present = sessions.filter(s=> (data.attendance[s.id]||{})[m.id]).length;
+      totalPresent += present;
+      const pct = sessions.length ? Math.round((present/sessions.length)*100) : 0;
+      return `
+        <div class="member-stat">
+          <div class="stat-line">
+            <span class="who">${escapeHtml(m.name)}${computeCategory(m.birthDate) ? `<span class="tag">${escapeHtml(computeCategory(m.birthDate))}</span>` : ''}</span>
+            <span class="pct">${pct}%</span>
+          </div>
+          <div class="frac">${present}/${sessions.length} séance${sessions.length===1?'':'s'}</div>
+          ${beltBarHtml(pct)}
+          <button class="ghost icon-btn" data-action="cert" data-id="${m.id}" data-group="${g.id}" style="margin-top:8px; width:100%; font-size:12.5px;">🏅 Générer un certificat</button>
+        </div>`;
+    }).join('') || '<div class="empty">Aucun pratiquant dans ce cours.</div>';
+
+    const avgPct = sessions.length && members.length ? Math.round((totalPresent/(sessions.length*members.length))*100) : 0;
+
+    return `
+      <div class="card">
+        <h2>${escapeHtml(g.name)} — ${year}</h2>
+        <div class="summary-grid">
+          <div class="box"><div class="n">${sessions.length}</div><div class="l">Séances</div></div>
+          <div class="box"><div class="n">${members.length}</div><div class="l">Pratiquants</div></div>
+          <div class="box"><div class="n">${avgPct}%</div><div class="l">Taux moyen</div></div>
+        </div>
+        ${memberRows}
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ---------------- CERTIFICAT DE SAISON ---------------- */
+document.getElementById('suivi-content').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-action="cert"]');
+  if(!btn) return;
+  openCertificate(btn.dataset.id, btn.dataset.group);
+});
+
+function openCertificate(memberId, groupId){
+  const m = data.members.find(x=>x.id===memberId);
+  const g = data.groups.find(x=>x.id===groupId);
+  if(!m || !g) return;
+  const year = document.getElementById('suiviYear').value;
+  const sessions = data.sessions.filter(s=>s.groupId===g.id && s.date.slice(0,4)===year && sessionHasRollCall(s.id));
+  const present = sessions.filter(s=>(data.attendance[s.id]||{})[m.id]).length;
+  const pct = sessions.length ? Math.round((present/sessions.length)*100) : 0;
+  const overlay = document.getElementById('certificate-overlay');
+  overlay.innerHTML = `
+    <div class="cert-card">
+      <div class="eyebrow" style="color:var(--tatami); font-size:11px; letter-spacing:.18em; text-transform:uppercase; font-weight:600;">${escapeHtml(data.clubName||'Dojo')}</div>
+      <h1 style="margin-top:8px;">Certificat de participation</h1>
+      <div class="sub">Saison ${year} — ${escapeHtml(g.name)}</div>
+      <div class="name display">${escapeHtml(m.name)}</div>
+      <div class="stat">${present} séance${present===1?'':'s'} sur ${sessions.length} — assiduité ${pct}%</div>
+      ${beltBarHtml(pct)}
+      <div class="stamp">Généré le ${fmtDate(todayStr())}</div>
+      <button class="primary" id="printCertBtn" style="width:100%; margin-top:22px;">Imprimer / Enregistrer en PDF</button>
+      <button class="ghost" id="closeCertBtn" style="width:100%; margin-top:8px;">Fermer</button>
+    </div>
+  `;
+  overlay.classList.add('show');
+  document.body.classList.add('cert-mode');
+  document.getElementById('printCertBtn').onclick = ()=> window.print();
+  document.getElementById('closeCertBtn').onclick = ()=>{
+    overlay.classList.remove('show');
+    overlay.innerHTML = '';
+    document.body.classList.remove('cert-mode');
+  };
+}
+
+/* ---------------- ANNIVERSAIRES & ALERTES DÉCROCHAGE ---------------- */
+function renderSuiviAlerts(){
+  const wrap = document.getElementById('suivi-alerts');
+  if(!wrap) return;
+  const now = new Date();
+  const curMonth = now.getMonth()+1, curYear = now.getFullYear();
+
+  const birthdays = data.members.filter(m=>{
+    if(!m.birthDate) return false;
+    return parseInt(m.birthDate.slice(5,7),10)===curMonth;
+  }).sort((a,b)=>a.birthDate.slice(8,10)-b.birthDate.slice(8,10));
+
+  const atRisk = [];
+  data.groups.forEach(g=>{
+    const sessions = data.sessions.filter(s=>s.groupId===g.id && sessionHasRollCall(s.id)).sort((a,b)=>b.date.localeCompare(a.date));
+    if(sessions.length<3) return;
+    const lastThree = sessions.slice(0,3);
+    data.members.filter(m=>m.groupId===g.id).forEach(m=>{
+      const absentAllThree = lastThree.every(s=> !(data.attendance[s.id]||{})[m.id]);
+      if(absentAllThree) atRisk.push({ member:m, group:g });
+    });
+  });
+
+  if(birthdays.length===0 && atRisk.length===0){ wrap.innerHTML=''; return; }
+
+  wrap.innerHTML = `
+    ${birthdays.length ? `
+    <div class="card">
+      <h2>🎂 Anniversaires ce mois-ci</h2>
+      ${birthdays.map(m=>{
+        const day = m.birthDate.slice(8,10);
+        const turns = curYear - parseInt(m.birthDate.slice(0,4),10);
+        return `<div class="member-chip"><span>${escapeHtml(m.name)}</span><span style="color:var(--ink-dim); font-size:13px;">${day} — ${turns} ans</span></div>`;
+      }).join('')}
+    </div>` : ''}
+    ${atRisk.length ? `
+    <div class="card">
+      <h2>⚠️ Absences répétées</h2>
+      <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 10px;">Absent aux 3 dernières séances enregistrées de leur cours.</p>
+      ${atRisk.map(r=>`<div class="member-chip"><span>${escapeHtml(r.member.name)}</span><span class="tag warn">${escapeHtml(r.group.name)}</span></div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+/* ---------------- SAUVEGARDE & EXPORT ---------------- */
+function downloadBlob(content, filename, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
+}
+
+function renderExportCard(){
+  const wrap = document.getElementById('export-card');
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <h2>Sauvegarde &amp; export</h2>
+    <button class="ghost" id="exportJsonBtn" style="width:100%;">Exporter mes données (.json)</button>
+    <button class="ghost" id="restoreJsonBtn" style="width:100%; margin-top:8px;">Restaurer une sauvegarde (.json)</button>
+    <button class="ghost" id="exportExcelBtn" style="width:100%; margin-top:8px;">Exporter en Excel (.xlsx)</button>
+    <button class="ghost" id="printBtn" style="width:100%; margin-top:8px;">Imprimer / Enregistrer en PDF</button>
+    <input type="file" id="restoreJsonInput" accept=".json" style="display:none">
+  `;
+  document.getElementById('exportJsonBtn').addEventListener('click', ()=>{
+    downloadBlob(JSON.stringify(data, null, 2), `sauvegarde-dojo-${todayStr()}.json`, 'application/json');
+    showToast('Sauvegarde téléchargée');
+  });
+  document.getElementById('restoreJsonBtn').addEventListener('click', ()=>{
+    document.getElementById('restoreJsonInput').click();
+  });
+  document.getElementById('restoreJsonInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    if(!confirm('Ceci remplace toutes les données actuelles par celles du fichier. Continuer ?')) return;
+    try{
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      parsed.groups ||= []; parsed.members ||= []; parsed.sessions ||= []; parsed.attendance ||= {};
+      data = parsed;
+      ensureSettings();
+      await saveData();
+      renderAll();
+      showToast('Données restaurées');
+    }catch(err){
+      showToast('Fichier de sauvegarde illisible');
+    }
+  });
+  document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+    if(typeof XLSX === 'undefined'){ showToast("La lecture de fichiers n'a pas pu se charger"); return; }
+    const wb = XLSX.utils.book_new();
+    const membresRows = [['Cours','Nom','Date de naissance','Catégorie','Email']];
+    data.groups.forEach(g=>{
+      data.members.filter(m=>m.groupId===g.id).forEach(m=>{
+        membresRows.push([g.name, m.name, m.birthDate||'', computeCategory(m.birthDate)||'', m.email||'']);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(membresRows), 'Membres');
+
+    const presRows = [['Cours','Date séance','Nom','Présent']];
+    data.groups.forEach(g=>{
+      data.sessions.filter(s=>s.groupId===g.id).sort((a,b)=>a.date.localeCompare(b.date)).forEach(s=>{
+        data.members.filter(m=>m.groupId===g.id).forEach(m=>{
+          presRows.push([g.name, s.date, m.name, (data.attendance[s.id]||{})[m.id] ? 'Oui' : 'Non']);
+        });
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(presRows), 'Présences');
+    XLSX.writeFile(wb, `suivi-presence-${todayStr()}.xlsx`);
+    showToast('Fichier Excel généré');
+  });
+  document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+}
+
+/* ---------------- CONVOCATIONS ---------------- */
+function updateConvocLinks(){
+  const titre = document.getElementById('convocTitre').value.trim() || 'Convocation';
+  const date = document.getElementById('convocDate').value;
+  const heure = document.getElementById('convocHeure').value.trim();
+  const lieu = document.getElementById('convocLieu').value.trim();
+  const consignes = document.getElementById('convocConsignes').value.trim();
+
+  let body = `Bonjour,\n\nVotre enfant est convoqué(e) à : ${titre}\n`;
+  if(date) body += `Date : ${fmtDate(date)}\n`;
+  if(heure) body += `Rendez-vous : ${heure}\n`;
+  if(lieu) body += `Lieu : ${lieu}\n`;
+  if(consignes) body += `\nInfos : ${consignes}\n`;
+  body += `\nSportivement,\n${data.clubName || 'Le club'}`;
+
+  const groupFilter = ui.convocGroup;
+  const members = groupFilter==='all' ? data.members : data.members.filter(m=>m.groupId===groupFilter);
+  const emails = members.filter(m=> ui.convocChecked[m.id]!==false && m.email).map(m=>m.email);
+
+  const mailLink = document.getElementById('convocMailLink');
+  const waLink = document.getElementById('convocWaLink');
+  if(mailLink){
+    if(emails.length){
+      mailLink.href = `mailto:?bcc=${encodeURIComponent(emails.join(','))}&subject=${encodeURIComponent('Convocation — '+titre)}&body=${encodeURIComponent(body)}`;
+      mailLink.classList.remove('ghost');
+      mailLink.textContent = `Envoyer par email (${emails.length})`;
+    } else {
+      mailLink.removeAttribute('href');
+      mailLink.classList.add('ghost');
+      mailLink.textContent = 'Envoyer par email (aucun email renseigné)';
+    }
+  }
+  if(waLink){
+    waLink.href = `https://wa.me/?text=${encodeURIComponent(body)}`;
+  }
+}
+
+function renderConvocTab(){
+  const groupSel = document.getElementById('convocGroupSel');
+  if(!groupSel) return;
+  const prev = ui.convocGroup;
+  groupSel.innerHTML = `<option value="all">Tous les cours</option>` + data.groups.map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+  if([...groupSel.options].some(o=>o.value===prev)) groupSel.value = prev;
+  ui.convocGroup = groupSel.value;
+
+  const members = ui.convocGroup==='all' ? data.members : data.members.filter(m=>m.groupId===ui.convocGroup);
+  const wrap = document.getElementById('convoc-members');
+  if(members.length===0){
+    wrap.innerHTML = `<div class="empty">Aucun pratiquant pour cette sélection.</div>`;
+  } else {
+    wrap.innerHTML = `<h2>Destinataires (${members.length})</h2>` + members.map(m=>{
+      const checked = ui.convocChecked[m.id] !== false;
+      return `
+      <div class="convoc-row">
+        <input type="checkbox" data-member="${m.id}" ${checked?'checked':''}>
+        <div class="info">
+          <div class="n">${escapeHtml(m.name)}</div>
+          <div class="e">${m.email ? escapeHtml(m.email) : 'Pas d’email renseigné'}</div>
+        </div>
+      </div>`;
+    }).join('');
+    wrap.querySelectorAll('[data-member]').forEach(cb=>{
+      cb.addEventListener('change', e=>{
+        ui.convocChecked[e.target.dataset.member] = e.target.checked;
+        updateConvocLinks();
+      });
+    });
+  }
+
+  const actions = document.getElementById('convoc-actions');
+  actions.innerHTML = `
+    <a class="action-link ghost" id="convocMailLink" target="_blank" rel="noopener">Envoyer par email</a>
+    <a class="action-link ghost" id="convocWaLink" href="#" target="_blank" rel="noopener">Partager via WhatsApp</a>
+  `;
+
+  groupSel.onchange = ()=>{ ui.convocGroup = groupSel.value; renderConvocTab(); };
+  ['convocTitre','convocDate','convocHeure','convocLieu','convocConsignes'].forEach(id=>{
+    document.getElementById(id).oninput = updateConvocLinks;
+  });
+  updateConvocLinks();
+}
+
+/* ---------------- Réinitialisation ---------------- */
+const footer = document.createElement('div');
+footer.className = 'settings-foot';
+footer.innerHTML = `<button id="resetBtn">Réinitialiser toutes les données</button>`;
+document.getElementById('tab-groupes').appendChild(footer);
+footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
+  if(!confirm('Ceci efface tous les cours, pratiquants et séances. Continuer ?')) return;
+  data = { clubName: data.clubName, groups:[], members:[], sessions:[], attendance:{} };
+  await saveData();
+  ui = { activeTab:'presences', presenceGroup:null, presenceSessionId:null };
+  renderAll();
+  showToast('Données réinitialisées');
+});
+
+loadData();
+</script>
+</body>
+</html>
