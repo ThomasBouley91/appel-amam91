@@ -1990,7 +1990,7 @@ function renderConvocTab(){
       <div class="convoc-row">
         <input type="checkbox" data-member="${m.id}" ${checked?'checked':''}>
         <div class="info">
-          <div class="n">${escapeHtml(m.name)}${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}</div>
+          <div class="n">${escapeHtml(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}</div>
           <div class="e">${m.email ? escapeHtml(m.email) : 'Pas d’email renseigné'}</div>
         </div>
       </div>`;
@@ -2255,6 +2255,7 @@ function renderConvocHistory(){
           </div>
           ${expanded ? (()=>{
             const birthDateOf = r => { const m = data.members.find(x=>x.id===r.memberId); return m ? m.birthDate : null; };
+            const beltOf = r => { const m = data.members.find(x=>x.id===r.memberId); return m ? m.belt : null; };
             const sortedRecipients = [...ev.recipients].sort((a,b)=>{
               const ra = categoryRank(birthDateOf(a)), rb = categoryRank(birthDateOf(b));
               if(ra.bandIdx !== rb.bandIdx) return ra.bandIdx - rb.bandIdx;
@@ -2264,7 +2265,7 @@ function renderConvocHistory(){
             return renderRowsWithCategoryDividers(sortedRecipients, birthDateOf, r=>`
             <div class="convoc-row">
               <div class="info">
-                <div class="n">${escapeHtml(r.name)}</div>
+                <div class="n">${escapeHtml(r.name)}${beltOf(r) ? beltSwatchHtml(beltOf(r), true) : ''}</div>
                 <div class="e">${r.opened ? '👀 Lien ouvert' : '⏳ Pas encore ouvert'}</div>
               </div>
               <div style="display:flex; gap:6px; flex-shrink:0;">
@@ -2348,6 +2349,7 @@ function buildConvocCardHtml(m, ctx, link){
         <p>Est invité(e) à participer au</p>
         <p class="cp-event">${escapeHtml(ctx.event)}</p>
         ${ctx.dateLabel ? `<p class="cp-underline">${escapeHtml(ctx.dateLabel)}</p>` : ''}
+        ${ctx.lieu ? `<p class="cp-underline">${escapeHtml(ctx.lieu)}</p>` : ''}
         ${ctx.ville ? `<p class="cp-underline">${escapeHtml(ctx.ville)}</p>` : ''}
         ${ctx.scheduleTable}
         <p>Un membre dirigeant du Club se trouvera sur place pour encadrer les combattants.</p>
