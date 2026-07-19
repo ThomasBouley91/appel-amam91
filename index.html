@@ -1973,7 +1973,9 @@ function renderConvocSchedule(){
       if(cb.checked){ if(!row.weights.includes(cb.value)) row.weights.push(cb.value); }
       else { row.weights = row.weights.filter(w=>w!==cb.value); }
       saveConvocDraft();
-      renderConvocSchedule();
+      const count = row.weights.length;
+      const label = wrap.querySelector(`[data-action="toggle-schedule-weight"][data-idx="${idx}"] span:first-child`);
+      if(label) label.textContent = `Poids : ${count ? count+' sélectionné'+(count>1?'s':'') : 'aucun sélectionné'}`;
     });
   });
   wrap.querySelectorAll('[data-action="del-schedule"]').forEach(btn=>{
@@ -2172,7 +2174,7 @@ function renderScheduleWeightField(r, idx){
   const bandLabel = bandLabelFromCategorie(r.categorie);
   const cats = weightOptionsForBandLabel(bandLabel);
   if(!cats){
-    return `<input type="text" data-field="weightText" data-idx="${idx}" value="${escapeHtml(r.weightText||'')}" placeholder="Poids (texte libre)" style="width:100%; margin-top:6px;">`;
+    return `<input type="text" data-field="weightText" data-idx="${idx}" value="${escapeHtml(r.weightText||'')}" placeholder="Poids (texte libre)" style="width:100%; margin-top:6px; padding:7px 10px; font-size:13.5px;">`;
   }
   const selected = r.weights || [];
   const expanded = !!ui.scheduleWeightExpanded[idx];
