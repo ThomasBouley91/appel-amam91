@@ -3116,8 +3116,11 @@ const WEIGHT_CATEGORIES_BY_BAND = {
   'seniors':   { g:['-60','-66','-73','-81','-90','-100','+100'], f:['-48','-52','-57','-63','-70','-78','+78'] },
   'vétérans':  { g:['-60','-66','-73','-81','-90','-100','+100'], f:['-48','-52','-57','-63','-70','-78','+78'] }
 };
+function normalizeCategoryKey(s){
+  return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
 function weightOptionsForBandLabel(bandLabel){
-  const key = String(bandLabel||'').trim().toLowerCase();
+  const key = normalizeCategoryKey(bandLabel);
   return WEIGHT_CATEGORIES_BY_BAND[key] || null;
 }
 function buildWeightFieldHtml(birthDate, currentValue, dataAttrs, forceMorphological){
