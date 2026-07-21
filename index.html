@@ -4578,7 +4578,6 @@ function buildResultRowsHtml(presents, birthDateOf, shiai){
     groups[label].push(r);
   });
   order.sort((a,b)=> categoryBandSortIndex(a) - categoryBandSortIndex(b));
-  });
   let gold=0, silver=0, bronze=0;
   const rows = [];
   order.forEach(label=>{
