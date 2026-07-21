@@ -3979,10 +3979,10 @@ function buildEventRecipientsHtml(ev){
   if(!ui.convocCategoryExpanded[ev.id]) ui.convocCategoryExpanded[ev.id] = {};
   const expandedState = ui.convocCategoryExpanded[ev.id];
 
-  const groups = {};
+const groups = {};
   const order = [];
   sortedRecipients.forEach(r=>{
-    const label = groupedCategoryLabel(birthDateOf(r));
+    const label = r.viaVeterans ? 'Vétérans' : groupedCategoryLabel(birthDateOf(r));
     if(!groups[label]){ groups[label]=[]; order.push(label); }
     groups[label].push(r);
   });
