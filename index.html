@@ -4706,7 +4706,14 @@ async function generateAnnualRecapPdf(){
 }
 
 function convocSelectedMembers(){
-  return data.members.filter(m => ui.convocChecked[m.id]===true);
+  const currentEventName = document.getElementById('convocEvent').value.trim();
+  const existingEvent = currentEventName
+    ? data.convocEvents.find(ev=> ev.name.trim().toLowerCase()===currentEventName.toLowerCase())
+    : null;
+  return data.members.filter(m =>
+    ui.convocChecked[m.id]===true ||
+    (existingEvent && existingEvent.recipients.some(r=>r.memberId===m.id))
+  );
 }
 
 function openConvocPrint(){
