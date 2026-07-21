@@ -2550,7 +2550,7 @@ function renderRowsWithCollapsibleCategoryDividers(items, birthDateOf, rowRender
   const groups = {};
   const order = [];
   items.forEach(item=>{
-    const label = groupedCategoryLabel(birthDateOf(item));
+    const label = (item && item.viaVeterans) ? 'Vétérans' : groupedCategoryLabel(birthDateOf(item));
     if(!groups[label]){ groups[label]=[]; order.push(label); }
     groups[label].push(item);
   });
