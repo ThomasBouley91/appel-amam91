@@ -1078,7 +1078,7 @@ function renderGroupsTab(){
             <div class="fiche-summary-name">
               ${genderBadgeHtml(m.gender)}
               <span class="fs-prenom">${escapeHtml(prenom)}</span> <strong>${escapeHtml(nom)}</strong>
-              ${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}
+              ${cat ? `<span class="tag">${escapeHtml(categoryYearLabelWithVeteran(m.birthDate, m.gender))}</span>` : ''}
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
               ${m.belt ? beltSwatchHtml(m.belt, true) : ''}
