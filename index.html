@@ -2641,8 +2641,8 @@ function renderConvocSchedule(){
 }
 
 function renderConvocTab(){
-  const catSel = document.getElementById('convocCategorySel');
-  if(!catSel) return;
+  const membersWrap = document.getElementById('convoc-members');
+  if(!membersWrap) return;
 
   if(!ui.convocDraftLoaded){
     const d = loadConvocDraft() || {};
@@ -2671,54 +2671,73 @@ function renderConvocTab(){
     }
     saveConvocDraft();
     updateConvocLinks();
+    renderConvocTab();
   };
-
-  const prev = ui.convocCategory;
-  const cats = groupedCategoriesAvailable();
-  catSel.innerHTML = `<option value="all">Toutes les catégories</option>` + cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(bandYearRangeLabel(c))}</option>`).join('');
-  if([...catSel.options].some(o=>o.value===prev)) catSel.value = prev;
-  ui.convocCategory = catSel.value;
 
   renderConvocSchedule();
 
-  const membersRaw = ui.convocCategory==='all' ? data.members : data.members.filter(m=>memberMatchesGroupedCategory(m, ui.convocCategory));
-  const members = ui.convocCategory==='all'
+  const existingEvent = currentEventName
+    ? data.convocEvents.find(ev=> ev.name.trim().toLowerCase()===currentEventName.toLowerCase())
+    : null;
+
+  const cats = groupedCategoriesAvailable();
+  let categoryValue = 'all';
+  if(ui.convocCategory && (ui.convocCategory==='all' || cats.includes(ui.convocCategory))) categoryValue = ui.convocCategory;
+  ui.convocCategory = categoryValue;
+
+  const membersRaw = categoryValue==='all' ? data.members : data.members.filter(m=>memberMatchesGroupedCategory(m, categoryValue));
+  const members = categoryValue==='all'
     ? sortMembersByCategoryThenName(membersRaw)
     : [...membersRaw].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
-  const wrap = document.getElementById('convoc-members');
-  const selectedCount = members.filter(m=>ui.convocChecked[m.id]===true).length;
+
+  const isAlreadyInvited = m => !!(existingEvent && existingEvent.recipients.some(r=>r.memberId===m.id));
+  const selectedCount = members.filter(m=> isAlreadyInvited(m) || ui.convocChecked[m.id]===true).length;
   const expanded = !!ui.convocMembersExpanded;
-  wrap.innerHTML = `
+
+  membersWrap.innerHTML = `
+    <h2 style="margin-bottom:10px;">Destinataires</h2>
+    <div class="row" style="margin:0 0 10px;">
+      <div style="flex:1">
+        <label class="small">Catégorie d'âge</label>
+        <select id="convocCategorySel">
+          <option value="all" ${categoryValue==='all'?'selected':''}>Toutes les catégories</option>
+          ${cats.map(c=>`<option value="${escapeHtml(c)}" ${categoryValue===c?'selected':''}>${escapeHtml(bandYearRangeLabel(c))}</option>`).join('')}
+        </select>
+      </div>
+    </div>
     <div class="group-title-row" data-action="toggle-convoc-members" style="cursor:pointer;">
-      <div class="name">Destinataires — ${selectedCount}/${members.length} sélectionné${selectedCount===1?'':'s'}</div>
+      <div class="name">${selectedCount}/${members.length} sélectionné${selectedCount===1?'':'s'}</div>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="flex-shrink:0; color:var(--ink-dim); transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
     </div>
     ${expanded ? (members.length===0 ? '<div class="empty">Aucun pratiquant pour cette sélection.</div>' : renderRowsWithCategoryDividers(members, m=>m.birthDate, m=>{
-      const checked = ui.convocChecked[m.id] === true;
+      const alreadyInvited = isAlreadyInvited(m);
+      const checked = alreadyInvited || ui.convocChecked[m.id] === true;
       const cat = computeCategory(m.birthDate);
       return `
-      <div class="convoc-row">
-        <input type="checkbox" data-member="${m.id}" ${checked?'checked':''}>
+      <div class="convoc-row"${alreadyInvited?' style="opacity:.6;"':''}>
+        <input type="checkbox" data-member="${m.id}" ${checked?'checked':''} ${alreadyInvited?'disabled':''}>
         <div class="info">
-          <div class="n">${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}</div>
+          <div class="n">${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}${alreadyInvited ? `<span class="tag">✓ Déjà convoqué(e)</span>` : ''}</div>
           <div class="e">${m.email ? escapeHtml(m.email) : 'Pas d’email renseigné'}</div>
         </div>
       </div>`;
     })) : ''}
   `;
-  const toggleMembersEl = wrap.querySelector('[data-action="toggle-convoc-members"]');
+  const toggleMembersEl = membersWrap.querySelector('[data-action="toggle-convoc-members"]');
   if(toggleMembersEl){
     toggleMembersEl.addEventListener('click', ()=>{
       ui.convocMembersExpanded = !ui.convocMembersExpanded;
       renderConvocTab();
     });
   }
-  wrap.querySelectorAll('[data-member]').forEach(cb=>{
+  membersWrap.querySelectorAll('[data-member]').forEach(cb=>{
     cb.addEventListener('change', e=>{
       ui.convocChecked[e.target.dataset.member] = e.target.checked;
       renderConvocTab();
     });
   });
+  const catSel = document.getElementById('convocCategorySel');
+  catSel.onchange = ()=>{ ui.convocCategory = catSel.value; renderConvocTab(); };
 
   const actions = document.getElementById('convoc-actions');
   actions.innerHTML = `
@@ -2745,7 +2764,6 @@ function renderConvocTab(){
     window.open(`https://wa.me/?text=${encodeURIComponent(body)}`, '_blank');
   });
 
-  catSel.onchange = ()=>{ ui.convocCategory = catSel.value; renderConvocTab(); };
   document.getElementById('addScheduleRowBtn').onclick = ()=>{
     ui.convocSchedule.push({ heureDebut:'', heureFin:'', categorie:'' });
     renderConvocSchedule();
@@ -2754,6 +2772,7 @@ function renderConvocTab(){
   ['convocEvent','convocDate','convocLieu','convocVille','convocConsignes','convocReplyDeadline'].forEach(id=>{
     document.getElementById(id).oninput = ()=>{ updateConvocLinks(); saveConvocDraft(); };
   });
+  document.getElementById('convocEvent').addEventListener('change', ()=> renderConvocTab());
   document.getElementById('resetConvocBtn').onclick = resetConvocForm;
   updateConvocLinks();
   renderConvocCurrent(); renderConvocArchive();
