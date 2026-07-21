@@ -3944,7 +3944,7 @@ function buildEventRecipientsHtml(ev){
     <div class="convoc-row">
       <div class="info">
         <div class="n">${nameWithBoldSurname(r.name)}${beltOf(r) ? beltSwatchHtml(beltOf(r), true) : ''}</div>
-        <div class="e">${ev.emailSent ? (r.opened ? '👀 Lien ouvert' : '⏳ Pas encore ouvert') : ''}</div>
+       <div class="e">${ev.emailSent ? ((r.opened || r.response) ? '👀 Lien ouvert' : '⏳ Pas encore ouvert') : ''}</div>
       </div>
       <div style="display:flex; gap:6px; flex-shrink:0; align-items:center;">
         ${!r.response ? `<button class="ghost icon-btn" data-action="send-single-convoc" data-event="${ev.id}" data-member="${r.memberId}" title="Envoyer la convocation par email à ${escapeHtml(displayNameOrder(r.name))} uniquement" style="font-size:12px; padding:6px 8px;">✉️</button>` : ''}
