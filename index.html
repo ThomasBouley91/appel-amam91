@@ -3919,7 +3919,28 @@ function buildEventRecipientsHtml(ev){
     if(ra.suffix !== rb.suffix) return ra.suffix - rb.suffix;
     return memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr');
   });
-  return renderRowsWithCategoryDividers(sortedRecipients, birthDateOf, r=>`
+
+  if(!ui.convocCategoryExpanded) ui.convocCategoryExpanded = {};
+  if(!ui.convocCategoryExpanded[ev.id]) ui.convocCategoryExpanded[ev.id] = {};
+  const expandedState = ui.convocCategoryExpanded[ev.id];
+
+  const groups = {};
+  const order = [];
+  sortedRecipients.forEach(r=>{
+    const label = groupedCategoryLabel(birthDateOf(r));
+    if(!groups[label]){ groups[label]=[]; order.push(label); }
+    groups[label].push(r);
+  });
+
+  let html = '';
+  order.forEach(label=>{
+    const isOpen = !!expandedState[label];
+    html += `<div class="category-divider" data-action="toggle-convoc-recipients-category" data-event="${ev.id}" data-label="${escapeHtml(label)}" style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <span>${escapeHtml(bandYearRangeLabel(label))}</span>
+      <span style="font-size:11px; font-weight:700; flex-shrink:0;">${groups[label].length} · ${isOpen?'▾':'▸'}</span>
+    </div>`;
+    if(isOpen){
+      groups[label].forEach(r=> html += `
     <div class="convoc-row">
       <div class="info">
         <div class="n">${nameWithBoldSurname(r.name)}${beltOf(r) ? beltSwatchHtml(beltOf(r), true) : ''}</div>
@@ -3931,6 +3952,9 @@ function buildEventRecipientsHtml(ev){
         <button class="ghost icon-btn" data-action="set-response" data-event="${ev.id}" data-member="${r.memberId}" data-value="absent" style="${r.response==='absent'?'background:var(--clay-dim); border-color:var(--clay); color:var(--clay);':''} font-size:12px; padding:6px 8px;">❌</button>
       </div>
     </div>`);
+    }
+  });
+  return html;
 }
 
 function attachRecipientHandlers(wrap, onAfterChange){
