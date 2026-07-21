@@ -3198,6 +3198,9 @@ function renderScheduleWeightField(r, idx){
 function isShiaiEvent(name){
   return /shiai/i.test(name||'');
 }
+function isVeteranCompetitionName(name){
+  return normalizeCategoryKey(name).includes('veteran');
+}
 
 function eventHasMissingResults(ev){
   if(!ev.date) return false;
