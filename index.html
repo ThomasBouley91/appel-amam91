@@ -2970,8 +2970,10 @@ function initCalendarCompetitionPicker(){
     if(!input.contains(e.target) && !wrap.contains(e.target)) wrap.classList.remove('show');
   });
   document.getElementById('addManualConvocBtn').addEventListener('click', ()=>{
-    document.getElementById('convoc-form-detail').style.display = 'block';
-    document.getElementById('convocEvent').focus();
+    const detail = document.getElementById('convoc-form-detail');
+    const isHidden = detail.style.display === 'none' || !detail.style.display;
+    detail.style.display = isHidden ? 'block' : 'none';
+    if(isHidden) document.getElementById('convocEvent').focus();
   });
 }
 const QUALIFICATION_COMPETITIONS = {
