@@ -845,6 +845,11 @@ function categoryYearLabelWithVeteran(birthDate, gender){
   if(!vLabel) return base;
   return base ? `${base} - Vétérans ${vLabel}` : `Vétérans ${vLabel}`;
 }
+  function categoryBandSortIndex(label){
+  const idx = (data.settings.ageBands||[]).findIndex(x=>x.label===label);
+  return idx===-1 ? 999 : idx;
+}
+function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
 function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
   if(viaVeterans){
     return `🎖️ Vétérans ${veteranLabelForMember(member) || ''}`.trim();
