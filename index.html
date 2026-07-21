@@ -4951,6 +4951,222 @@ async function sendConvocationsWithPdf(){
   renderConvocCurrent(); renderConvocArchive();
 }
 
+/* ---------------- ARCHIVES DE SAISON ---------------- */
+function computeCategoryForArchive(birthDate, settings){
+  if(!birthDate) return null;
+  const birthYear = parseInt(birthDate.slice(0,4),10);
+  if(!birthYear) return null;
+  const seasonYear = settings.seasonStartYear;
+  const age = seasonYear - birthYear;
+  const band = (settings.ageBands||[]).find(b=>age>=b.minAge && age<=b.maxAge);
+  if(!band) return null;
+  const span = band.maxAge - band.minAge + 1;
+  if(span<=1 || band.label==='Seniors') return band.label;
+  const suffix = age - band.minAge + 1;
+  return `${band.label} ${suffix}`;
+}
+
+function archiveCurrentSeason(){
+  const defaultName = schoolYearLabel(data.settings.seasonStartYear || autoSeasonStartYear());
+  const name = prompt('Nom de cette saison (ex. 2025-2026) :', defaultName);
+  if(!name || !name.trim()) return;
+  if(!confirm(`Archiver la saison « ${name.trim()} » puis TOUT vider (groupes, élèves, présences, convocations, résultats, stages) pour repartir sur une page vierge ?\n\nAssure-toi d'avoir fait un export Excel si besoin avant de continuer.`)) return;
+
+  const snapshot = {
+    id: uid(),
+    name: name.trim(),
+    archivedAt: todayStr(),
+    clubName: data.clubName || '',
+    groups: JSON.parse(JSON.stringify(data.groups)),
+    members: JSON.parse(JSON.stringify(data.members)),
+    sessions: JSON.parse(JSON.stringify(data.sessions)),
+    attendance: JSON.parse(JSON.stringify(data.attendance)),
+    convocEvents: JSON.parse(JSON.stringify(data.convocEvents||[])),
+    stages: JSON.parse(JSON.stringify(data.stages||[])),
+    settings: {
+      ageBands: JSON.parse(JSON.stringify(data.settings.ageBands||[])),
+      seasonStartYear: data.settings.seasonStartYear || autoSeasonStartYear()
+    }
+  };
+  data.archivedSeasons = data.archivedSeasons || [];
+  data.archivedSeasons.push(snapshot);
+
+  data.groups = [];
+  data.members = [];
+  data.sessions = [];
+  data.attendance = {};
+  data.convocEvents = [];
+  data.stages = [];
+
+  saveData();
+  ui.groupsExpanded = {};
+  ui.memberFicheExpanded = {};
+  ui.memberFicheEditing = {};
+  ui.presenceGroup = null;
+  ui.presenceSessionId = null;
+  ui.convocChecked = {};
+  ui.resultsEventId = null;
+  ui.resultsSelectedMemberId = null;
+  renderAll();
+  showToast(`Saison « ${snapshot.name} » archivée et données remises à zéro`);
+}
+
+function renderArchiveSummaryHtml(archive){
+  const settings = archive.settings || { ageBands: [], seasonStartYear: null };
+  const groupsHtml = archive.groups.map(g=>{
+    const members = archive.members.filter(m=>m.groupId===g.id).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+    const sessions = archive.sessions.filter(s=>s.groupId===g.id && s.validated);
+    const rows = members.map(m=>{
+      const present = sessions.filter(s=> isPresent((archive.attendance[s.id]||{})[m.id])).length;
+      const pct = sessions.length ? Math.round((present/sessions.length)*100) : 0;
+      const cat = computeCategoryForArchive(m.birthDate, settings);
+      return `<div class="member-stat">
+        <div class="stat-line">
+          <span class="who">${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(cat)}</span>` : ''}</span>
+          <span class="pct">${sessions.length ? pct+'%' : '—'}</span>
+        </div>
+        ${sessions.length ? `<div class="frac">${present}/${sessions.length} séance${sessions.length===1?'':'s'}</div>` : ''}
+      </div>`;
+    }).join('') || '<div class="empty">Aucun élève dans ce cours.</div>';
+    return `<div class="group-block">
+      <div class="group-title-row"><div class="name">${escapeHtml(g.name)}</div><div class="meta">${members.length} pratiquant${members.length===1?'':'s'} · ${sessions.length} séance${sessions.length===1?'':'s'} validée${sessions.length===1?'':'s'}</div></div>
+      ${rows}
+    </div>`;
+  }).join('') || '<div class="empty">Aucun cours archivé.</div>';
+
+  let gold=0, silver=0, bronze=0, totalParticipations=0;
+  const resultsRows = [];
+  (archive.convocEvents||[]).forEach(ev=>{
+    ev.recipients.forEach(r=>{
+      if(r.response==='present' && r.result){
+        totalParticipations++;
+        if(String(r.result)==='1') gold++; else if(String(r.result)==='2') silver++; else if(String(r.result)==='3') bronze++;
+        resultsRows.push(`<div class="convoc-row"><div class="info"><div class="n">${nameWithBoldSurname(r.name)}</div><div class="e">${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</div></div><span class="tag" style="${isShiaiEvent(ev.name)?'':medalStyle(r.result)}">${escapeHtml(r.result)}${isShiaiEvent(ev.name)?' Points':''}</span></div>`);
+      }
+    });
+  });
+  const resultsHtml = resultsRows.length
+    ? `<div class="medal-breakdown" style="margin-bottom:10px;">
+         <div class="medal-chip" style="${medalStyle('1')}"><span class="mn">🥇 ${gold}</span></div>
+         <div class="medal-chip" style="${medalStyle('2')}"><span class="mn">🥈 ${silver}</span></div>
+         <div class="medal-chip" style="${medalStyle('3')}"><span class="mn">🥉 ${bronze}</span></div>
+       </div>` + resultsRows.join('')
+    : '<div class="empty">Aucun résultat enregistré.</div>';
+
+  const stagesHtml = (archive.stages||[]).filter(s=>s.validated).map(s=>`
+    <div class="convoc-row"><div class="info"><div class="n">${escapeHtml(s.name)}</div><div class="e">${s.dateStart?fmtDate(s.dateStart):''}${s.dateEnd && s.dateEnd!==s.dateStart?' au '+fmtDate(s.dateEnd):''} · ${s.participants.length} participant${s.participants.length===1?'':'s'}</div></div></div>`
+  ).join('') || '<div class="empty">Aucun stage validé.</div>';
+
+  const beltRows = [];
+  archive.members.forEach(m=>{
+    (m.beltHistory||[]).forEach(bh=>{
+      beltRows.push(`<div class="convoc-row"><div class="info"><div class="n">🥋 ${nameWithBoldSurname(m.name)}</div><div class="e">Ceinture ${escapeHtml((beltLabelFor(bh.belt)||'').toLowerCase())} — ${bh.date?fmtDate(bh.date):''}</div></div></div>`);
+    });
+  });
+  const beltsHtml = beltRows.length ? beltRows.join('') : '<div class="empty">Aucun passage de grade enregistré.</div>';
+
+  return `
+    <h2 style="font-size:14px; margin-top:16px;">Groupes & effectifs</h2>
+    ${groupsHtml}
+    <h2 style="font-size:14px; margin-top:16px;">Résultats & médailles (${totalParticipations} participation${totalParticipations===1?'':'s'})</h2>
+    ${resultsHtml}
+    <h2 style="font-size:14px; margin-top:16px;">Stages</h2>
+    ${stagesHtml}
+    <h2 style="font-size:14px; margin-top:16px;">Passages de grade</h2>
+    ${beltsHtml}
+  `;
+}
+
+function renderArchiveCard(){
+  const wrap = document.getElementById('archive-card');
+  if(!wrap) return;
+  const archives = [...(data.archivedSeasons||[])].sort((a,b)=> (b.archivedAt||'').localeCompare(a.archivedAt||''));
+  if(!ui.archiveExpanded) ui.archiveExpanded = {};
+  wrap.innerHTML = `
+    <h2>Archives de saison</h2>
+    <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">Archiver la saison en cours enregistre une photo de toutes les données actuelles (groupes, élèves, présences, convocations, résultats, stages) puis vide l'application pour repartir sur une nouvelle saison. Les archives restent uniquement sur cet appareil — pense à les exporter si tu changes d'ordinateur.</p>
+    <button class="danger" id="archiveSeasonBtn" style="width:100%;">Archiver la saison en cours et tout vider</button>
+    <button class="ghost" id="importArchiveBtn" style="width:100%; margin-top:8px;">Importer une archive (.json)</button>
+    <input type="file" id="importArchiveInput" accept=".json" style="display:none">
+    ${archives.length===0 ? '<div class="empty" style="margin-top:12px;">Aucune saison archivée pour l’instant.</div>' : archives.map(a=>{
+      const expanded = !!ui.archiveExpanded[a.id];
+      return `
+      <div class="group-block" style="margin-top:12px;">
+        <div class="group-title-row" data-action="toggle-archive" data-id="${a.id}" style="cursor:pointer;">
+          <div>
+            <div class="name">${escapeHtml(a.name)}</div>
+            <div class="meta">Archivée le ${fmtDate(a.archivedAt)} · ${a.groups.length} cours · ${a.members.length} élèves</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="ghost icon-btn" data-action="export-archive" data-id="${a.id}" title="Exporter cette archive (.json)" style="padding:7px 8px;">${ICON_PDF}</button>
+            <button class="danger icon-btn" data-action="delete-archive" data-id="${a.id}" style="font-size:12px;">Supprimer</button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="flex-shrink:0; color:var(--ink-dim); transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+        ${expanded ? renderArchiveSummaryHtml(a) : ''}
+      </div>`;
+    }).join('')}
+  `;
+  document.getElementById('archiveSeasonBtn').addEventListener('click', archiveCurrentSeason);
+  document.getElementById('importArchiveBtn').addEventListener('click', ()=> document.getElementById('importArchiveInput').click());
+  document.getElementById('importArchiveInput').addEventListener('change', importArchiveFile);
+  wrap.querySelectorAll('[data-action="toggle-archive"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      ui.archiveExpanded[el.dataset.id] = !ui.archiveExpanded[el.dataset.id];
+      renderArchiveCard();
+    });
+  });
+  wrap.querySelectorAll('[data-action="export-archive"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const a = (data.archivedSeasons||[]).find(x=>x.id===btn.dataset.id);
+      if(!a) return;
+      downloadBlob(JSON.stringify(a, null, 2), `archive-saison-${a.name.replace(/[^\w-]+/g,'-')}.json`, 'application/json');
+      showToast('Archive exportée');
+    });
+  });
+  wrap.querySelectorAll('[data-action="delete-archive"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const a = (data.archivedSeasons||[]).find(x=>x.id===btn.dataset.id);
+      if(!confirm(`Supprimer définitivement l’archive « ${a?a.name:''} » ? Cette action est irréversible.`)) return;
+      data.archivedSeasons = (data.archivedSeasons||[]).filter(x=>x.id!==btn.dataset.id);
+      saveData();
+      renderArchiveCard();
+      showToast('Archive supprimée');
+    });
+  });
+}
+
+async function importArchiveFile(e){
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if(!parsed || !parsed.name || !Array.isArray(parsed.groups)){
+      showToast('Fichier d’archive invalide');
+      return;
+    }
+    data.archivedSeasons = data.archivedSeasons || [];
+    const existingIdx = data.archivedSeasons.findIndex(a=> a.name===parsed.name);
+    if(existingIdx>-1){
+      if(!confirm(`Une archive nommée « ${parsed.name} » existe déjà. La remplacer ?`)) return;
+      parsed.id = data.archivedSeasons[existingIdx].id;
+      data.archivedSeasons[existingIdx] = parsed;
+    } else {
+      if(!parsed.id) parsed.id = uid();
+      data.archivedSeasons.push(parsed);
+    }
+    saveData();
+    renderArchiveCard();
+    showToast(`Archive « ${parsed.name} » importée`);
+  }catch(err){
+    showToast('Impossible de lire ce fichier d’archive');
+  }
+}
+
 /* ---------------- Réinitialisation ---------------- */
 const footer = document.createElement('div');
 footer.className = 'settings-foot';
