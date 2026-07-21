@@ -4573,14 +4573,11 @@ function buildResultRowsHtml(presents, birthDateOf, shiai){
   const groups = {};
   const order = [];
   presents.forEach(r=>{
-    const label = groupedCategoryLabel(birthDateOf(r));
+    const label = r.viaVeterans ? 'Vétérans' : groupedCategoryLabel(birthDateOf(r));
     if(!groups[label]){ groups[label]=[]; order.push(label); }
     groups[label].push(r);
   });
-  order.sort((a,b)=>{
-    const ia = (data.settings.ageBands||[]).findIndex(x=>x.label===a);
-    const ib = (data.settings.ageBands||[]).findIndex(x=>x.label===b);
-    return ia-ib;
+  order.sort((a,b)=> categoryBandSortIndex(a) - categoryBandSortIndex(b));
   });
   let gold=0, silver=0, bronze=0;
   const rows = [];
