@@ -4603,9 +4603,7 @@ function buildResultRowsHtml(presents, birthDateOf, shiai){
         else if(String(r.result)==='3') bronze++;
       }
       const memberForCat = data.members.find(x=>x.id===r.memberId);
-      const cat = r.viaVeterans
-        ? `🎖️ Vétérans ${veteranLabelForMember(memberForCat) || ''}`.trim()
-        : categoryYearLabelWithVeteran(birthDateOf(r), memberForCat ? memberForCat.gender : '');
+      const cat = categoryLabelForResultsPdf(birthDateOf(r), memberForCat ? memberForCat.gender : '', r.viaVeterans, memberForCat);
       const weightLabel = weightDisplayValue(birthDateOf(r), r.weight);
       let resultCell;
       if(!r.result){
