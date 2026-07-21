@@ -2494,6 +2494,7 @@ function groupedCategoriesAvailable(){
   return labels;
 }
 function memberMatchesGroupedCategory(member, groupLabel){
+  if(groupLabel==='Vétérans') return !!veteranLabelForMember(member);
   return groupedCategoryLabel(member.birthDate) === groupLabel;
 }
 function categoryYearLabel(birthDate){
