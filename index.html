@@ -3498,6 +3498,7 @@ function initAddResultForm(){
     recipient.response = 'present';
     recipient.result = resultVal;
     recipient.weight = weightVal;
+    if(isVeteranCompetitionName(nameVal)) recipient.viaVeterans = true;
     if(ui.addResultQualificationChecked && ui.addResultQualificationFor){
       recipient.qualificationFor = ui.addResultQualificationFor;
     }
