@@ -4965,6 +4965,28 @@ function computeCategoryForArchive(birthDate, settings){
   const suffix = age - band.minAge + 1;
   return `${band.label} ${suffix}`;
 }
+function categoryYearLabelForArchive(birthDate, settings){
+  const cat = computeCategoryForArchive(birthDate, settings);
+  if(!cat) return '';
+  const birthYear = parseInt((birthDate||'').slice(0,4),10);
+  return birthYear ? `${cat} (${birthYear})` : cat;
+}
+function categoryRankForArchive(birthDate, settings){
+  if(!birthDate) return { bandIdx: 999, suffix: 999 };
+  const birthYear = parseInt(birthDate.slice(0,4),10);
+  if(!birthYear) return { bandIdx: 999, suffix: 999 };
+  const age = settings.seasonStartYear - birthYear;
+  const bands = settings.ageBands||[];
+  for(let i=0;i<bands.length;i++){
+    const b = bands[i];
+    if(age>=b.minAge && age<=b.maxAge) return { bandIdx:i, suffix: age-b.minAge+1 };
+  }
+  return { bandIdx: 999, suffix: 999 };
+}
+function archiveMemberBirthDate(archive, memberId){
+  const m = archive.members.find(x=>x.id===memberId);
+  return m ? m.birthDate : null;
+}
 
 function archiveCurrentSeason(){
   const defaultName = schoolYearLabel(data.settings.seasonStartYear || autoSeasonStartYear());
@@ -5011,70 +5033,355 @@ function archiveCurrentSeason(){
   showToast(`Saison « ${snapshot.name} » archivée et données remises à zéro`);
 }
 
-function renderArchiveSummaryHtml(archive){
-  const settings = archive.settings || { ageBands: [], seasonStartYear: null };
-  const groupsHtml = archive.groups.map(g=>{
-    const members = archive.members.filter(m=>m.groupId===g.id).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
-    const sessions = archive.sessions.filter(s=>s.groupId===g.id && s.validated);
-    const rows = members.map(m=>{
-      const present = sessions.filter(s=> isPresent((archive.attendance[s.id]||{})[m.id])).length;
+/* ---- Onglet Groupe ---- */
+function buildArchiveGroupShellHtml(archive, aid){
+  if(!ui.archiveGroupSearch) ui.archiveGroupSearch = {};
+  return `
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="archiveGroupSearch-${aid}" placeholder="🔍 Rechercher un élève..." value="${escapeHtml(ui.archiveGroupSearch[aid]||'')}">
+    </div>
+    <div id="archiveGroupBody-${aid}" style="margin-top:8px;"></div>
+  `;
+}
+function renderArchiveGroupBody(archive, aid){
+  if(!ui.archiveGroupSearch) ui.archiveGroupSearch = {};
+  if(!ui.archiveGroupsExpanded) ui.archiveGroupsExpanded = {};
+  if(!ui.archiveGroupsExpanded[aid]) ui.archiveGroupsExpanded[aid] = {};
+  const query = (ui.archiveGroupSearch[aid]||'').trim().toLowerCase();
+  const settings = archive.settings||{ageBands:[],seasonStartYear:null};
+
+  if(query){
+    const matches = archive.members.filter(m=>m.name.toLowerCase().includes(query));
+    return matches.length===0 ? '<div class="empty">Aucun élève trouvé.</div>' : matches.map(m=>{
+      const g = archive.groups.find(x=>x.id===m.groupId);
+      const cat = categoryYearLabelForArchive(m.birthDate, settings);
+      return `<div class="member-chip">
+        <span>${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${m.belt?beltSwatchHtml(m.belt,true):''}${cat?`<span class="tag">${escapeHtml(cat)}</span>`:''}</span>
+        <span style="font-size:12px; color:var(--ink-dim); flex-shrink:0;">${g?escapeHtml(g.name):'—'}</span>
+      </div>`;
+    }).join('');
+  }
+  return archive.groups.map(g=>{
+    const members = archive.members.filter(m=>m.groupId===g.id).sort((a,b)=>memberSurname(a.name).localeCompare(memberSurname(b.name),'fr'));
+    const expanded = !!ui.archiveGroupsExpanded[aid][g.id];
+    return `<div class="group-block">
+      <div class="group-title-row" data-action="toggle-archive-group" data-aid="${aid}" data-gid="${g.id}" style="cursor:pointer;">
+        <div class="name">${escapeHtml(g.name)}</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="meta">${members.length} pratiquant${members.length===1?'':'s'}</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+      ${expanded ? (members.map(m=>{
+        const cat = categoryYearLabelForArchive(m.birthDate, settings);
+        return `<div class="member-chip"><span>${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${m.belt?beltSwatchHtml(m.belt,true):''}${cat?`<span class="tag">${escapeHtml(cat)}</span>`:''}</span></div>`;
+      }).join('') || '<div class="empty">Aucun élève.</div>') : ''}
+    </div>`;
+  }).join('') || '<div class="empty">Aucun cours archivé.</div>';
+}
+function refreshArchiveGroupBody(archive, aid){
+  const body = document.getElementById(`archiveGroupBody-${aid}`);
+  if(!body) return;
+  body.innerHTML = renderArchiveGroupBody(archive, aid);
+  body.querySelectorAll('[data-action="toggle-archive-group"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      if(!ui.archiveGroupsExpanded) ui.archiveGroupsExpanded = {};
+      if(!ui.archiveGroupsExpanded[aid]) ui.archiveGroupsExpanded[aid] = {};
+      ui.archiveGroupsExpanded[aid][el.dataset.gid] = !ui.archiveGroupsExpanded[aid][el.dataset.gid];
+      refreshArchiveGroupBody(archive, aid);
+    });
+  });
+}
+function mountArchiveGroupHandlers(archive, aid){
+  refreshArchiveGroupBody(archive, aid);
+  const input = document.getElementById(`archiveGroupSearch-${aid}`);
+  if(input){
+    input.addEventListener('input', ()=>{
+      if(!ui.archiveGroupSearch) ui.archiveGroupSearch = {};
+      ui.archiveGroupSearch[aid] = input.value;
+      refreshArchiveGroupBody(archive, aid);
+    });
+  }
+}
+
+/* ---- Onglet Présence ---- */
+function buildArchivePresenceShellHtml(archive, aid){
+  if(!ui.archivePresenceGroup) ui.archivePresenceGroup = {};
+  const groupId = ui.archivePresenceGroup[aid] || '';
+  const groupOptions = archive.groups.map(g=>`<option value="${g.id}" ${g.id===groupId?'selected':''}>${escapeHtml(g.name)}</option>`).join('');
+  return `
+    <div class="row" style="margin-top:10px;">
+      <select id="archivePresenceGroupSel-${aid}" style="flex:1;">
+        <option value="">— Choisir un cours —</option>
+        ${groupOptions}
+      </select>
+    </div>
+    <div class="row" id="archivePresenceSearchWrap-${aid}" style="margin-top:8px; ${groupId?'':'display:none;'}">
+      <input type="text" id="archivePresenceSearch-${aid}" placeholder="🔍 Filtrer par nom..." value="${escapeHtml((ui.archivePresenceSearch&&ui.archivePresenceSearch[aid])||'')}">
+    </div>
+    <div id="archivePresenceBody-${aid}" style="margin-top:8px;"></div>
+  `;
+}
+function renderArchivePresenceBody(archive, aid){
+  if(!ui.archivePresenceGroup) ui.archivePresenceGroup = {};
+  if(!ui.archivePresenceSearch) ui.archivePresenceSearch = {};
+  const groupId = ui.archivePresenceGroup[aid] || '';
+  const query = (ui.archivePresenceSearch[aid]||'').trim().toLowerCase();
+  const settings = archive.settings||{ageBands:[],seasonStartYear:null};
+  if(!groupId) return '<div class="empty">Choisis un cours ci-dessus pour voir les présences.</div>';
+
+  const sessions = archive.sessions.filter(s=>s.groupId===groupId && s.validated);
+  let members = archive.members.filter(m=>m.groupId===groupId);
+  const totalCount = members.length;
+  if(query) members = members.filter(m=>m.name.toLowerCase().includes(query));
+  members = members.sort((a,b)=>memberSurname(a.name).localeCompare(memberSurname(b.name),'fr'));
+  return `
+    <div class="summary-grid">
+      <div class="box"><div class="n">${sessions.length}</div><div class="l">Séances</div></div>
+      <div class="box"><div class="n">${totalCount}</div><div class="l">Pratiquants</div></div>
+    </div>
+    ${members.length===0 ? '<div class="empty">Aucun élève trouvé.</div>' : members.map(m=>{
+      const present = sessions.filter(s=>isPresent((archive.attendance[s.id]||{})[m.id])).length;
       const pct = sessions.length ? Math.round((present/sessions.length)*100) : 0;
-      const cat = computeCategoryForArchive(m.birthDate, settings);
+      const cat = categoryYearLabelForArchive(m.birthDate, settings);
       return `<div class="member-stat">
         <div class="stat-line">
-          <span class="who">${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(cat)}</span>` : ''}</span>
+          <span class="who">${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${m.belt?beltSwatchHtml(m.belt,true):''}${cat?`<span class="tag">${escapeHtml(cat)}</span>`:''}</span>
           <span class="pct">${sessions.length ? pct+'%' : '—'}</span>
         </div>
         ${sessions.length ? `<div class="frac">${present}/${sessions.length} séance${sessions.length===1?'':'s'}</div>` : ''}
       </div>`;
-    }).join('') || '<div class="empty">Aucun élève dans ce cours.</div>';
-    return `<div class="group-block">
-      <div class="group-title-row"><div class="name">${escapeHtml(g.name)}</div><div class="meta">${members.length} pratiquant${members.length===1?'':'s'} · ${sessions.length} séance${sessions.length===1?'':'s'} validée${sessions.length===1?'':'s'}</div></div>
-      ${rows}
-    </div>`;
-  }).join('') || '<div class="empty">Aucun cours archivé.</div>';
-
-  let gold=0, silver=0, bronze=0, totalParticipations=0;
-  const resultsRows = [];
-  (archive.convocEvents||[]).forEach(ev=>{
-    ev.recipients.forEach(r=>{
-      if(r.response==='present' && r.result){
-        totalParticipations++;
-        if(String(r.result)==='1') gold++; else if(String(r.result)==='2') silver++; else if(String(r.result)==='3') bronze++;
-        resultsRows.push(`<div class="convoc-row"><div class="info"><div class="n">${nameWithBoldSurname(r.name)}</div><div class="e">${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</div></div><span class="tag" style="${isShiaiEvent(ev.name)?'':medalStyle(r.result)}">${escapeHtml(r.result)}${isShiaiEvent(ev.name)?' Points':''}</span></div>`);
-      }
-    });
-  });
-  const resultsHtml = resultsRows.length
-    ? `<div class="medal-breakdown" style="margin-bottom:10px;">
-         <div class="medal-chip" style="${medalStyle('1')}"><span class="mn">🥇 ${gold}</span></div>
-         <div class="medal-chip" style="${medalStyle('2')}"><span class="mn">🥈 ${silver}</span></div>
-         <div class="medal-chip" style="${medalStyle('3')}"><span class="mn">🥉 ${bronze}</span></div>
-       </div>` + resultsRows.join('')
-    : '<div class="empty">Aucun résultat enregistré.</div>';
-
-  const stagesHtml = (archive.stages||[]).filter(s=>s.validated).map(s=>`
-    <div class="convoc-row"><div class="info"><div class="n">${escapeHtml(s.name)}</div><div class="e">${s.dateStart?fmtDate(s.dateStart):''}${s.dateEnd && s.dateEnd!==s.dateStart?' au '+fmtDate(s.dateEnd):''} · ${s.participants.length} participant${s.participants.length===1?'':'s'}</div></div></div>`
-  ).join('') || '<div class="empty">Aucun stage validé.</div>';
-
-  const beltRows = [];
-  archive.members.forEach(m=>{
-    (m.beltHistory||[]).forEach(bh=>{
-      beltRows.push(`<div class="convoc-row"><div class="info"><div class="n">🥋 ${nameWithBoldSurname(m.name)}</div><div class="e">Ceinture ${escapeHtml((beltLabelFor(bh.belt)||'').toLowerCase())} — ${bh.date?fmtDate(bh.date):''}</div></div></div>`);
-    });
-  });
-  const beltsHtml = beltRows.length ? beltRows.join('') : '<div class="empty">Aucun passage de grade enregistré.</div>';
-
-  return `
-    <h2 style="font-size:14px; margin-top:16px;">Groupes & effectifs</h2>
-    ${groupsHtml}
-    <h2 style="font-size:14px; margin-top:16px;">Résultats & médailles (${totalParticipations} participation${totalParticipations===1?'':'s'})</h2>
-    ${resultsHtml}
-    <h2 style="font-size:14px; margin-top:16px;">Stages</h2>
-    ${stagesHtml}
-    <h2 style="font-size:14px; margin-top:16px;">Passages de grade</h2>
-    ${beltsHtml}
+    }).join('')}
   `;
+}
+function refreshArchivePresenceBody(archive, aid){
+  const body = document.getElementById(`archivePresenceBody-${aid}`);
+  if(body) body.innerHTML = renderArchivePresenceBody(archive, aid);
+}
+function mountArchivePresenceHandlers(archive, aid){
+  refreshArchivePresenceBody(archive, aid);
+  const sel = document.getElementById(`archivePresenceGroupSel-${aid}`);
+  if(sel){
+    sel.addEventListener('change', ()=>{
+      if(!ui.archivePresenceGroup) ui.archivePresenceGroup = {};
+      ui.archivePresenceGroup[aid] = sel.value;
+      const searchWrap = document.getElementById(`archivePresenceSearchWrap-${aid}`);
+      if(searchWrap) searchWrap.style.display = sel.value ? '' : 'none';
+      refreshArchivePresenceBody(archive, aid);
+    });
+  }
+  const input = document.getElementById(`archivePresenceSearch-${aid}`);
+  if(input){
+    input.addEventListener('input', ()=>{
+      if(!ui.archivePresenceSearch) ui.archivePresenceSearch = {};
+      ui.archivePresenceSearch[aid] = input.value;
+      refreshArchivePresenceBody(archive, aid);
+    });
+  }
+}
+function weightDisplayValueForArchive(birthDate, weight, forceMorphological, settings){
+  if(forceMorphological) return 'Poule morphologique';
+  if(weight==='Poule morphologique') return weight;
+  const rank = categoryRankForArchive(birthDate, settings);
+  const bandLabel = (settings.ageBands||[])[rank.bandIdx] ? settings.ageBands[rank.bandIdx].label : null;
+  const cats = bandLabel ? weightOptionsForBandLabel(bandLabel) : null;
+  if(weight) return `${weight} kg`;
+  return cats ? '—' : 'Poule morphologique';
+}
+
+/* ---- Onglet Résultats & médailles ---- */
+function renderArchiveResultsShellHtml(archive, aid){
+  if(!ui.archiveResultsEvent) ui.archiveResultsEvent = {};
+  const eventId = ui.archiveResultsEvent[aid] || '';
+  const events = [...(archive.convocEvents||[])].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const options = events.map(ev=>`<option value="${ev.id}" ${ev.id===eventId?'selected':''}>${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</option>`).join('');
+  return `
+    <div class="row" style="margin-top:10px;">
+      <select id="archiveResultsEventSel-${aid}" style="flex:1;">
+        <option value="">— Choisir une compétition —</option>
+        ${options}
+      </select>
+    </div>
+    <div id="archiveResultsBody-${aid}" style="margin-top:8px;"></div>
+  `;
+}
+function renderArchiveResultsBody(archive, aid){
+  if(!ui.archiveResultsEvent) ui.archiveResultsEvent = {};
+  const eventId = ui.archiveResultsEvent[aid] || '';
+  if(!eventId) return '<div class="empty">Choisis une compétition ci-dessus.</div>';
+  const ev = (archive.convocEvents||[]).find(x=>x.id===eventId);
+  if(!ev) return '<div class="empty">Compétition introuvable.</div>';
+  const presents = ev.recipients.filter(r=>r.response==='present');
+  if(presents.length===0) return '<div class="empty">Aucun participant présent pour cette compétition.</div>';
+  const settings = archive.settings||{ageBands:[],seasonStartYear:null};
+  const shiai = isShiaiEvent(ev.name);
+  const sorted = [...presents].sort((a,b)=>{
+    const ra = categoryRankForArchive(archiveMemberBirthDate(archive,a.memberId), settings);
+    const rb = categoryRankForArchive(archiveMemberBirthDate(archive,b.memberId), settings);
+    if(ra.bandIdx!==rb.bandIdx) return ra.bandIdx-rb.bandIdx;
+    if(ra.suffix!==rb.suffix) return ra.suffix-rb.suffix;
+    return memberSurname(a.name).localeCompare(memberSurname(b.name),'fr');
+  });
+  let gold=0,silver=0,bronze=0;
+  const rows = sorted.map(r=>{
+    if(!shiai){
+      if(String(r.result)==='1') gold++; else if(String(r.result)==='2') silver++; else if(String(r.result)==='3') bronze++;
+    }
+    const cat = categoryYearLabelForArchive(archiveMemberBirthDate(archive,r.memberId), settings);
+    const weightLabel = weightDisplayValueForArchive(archiveMemberBirthDate(archive,r.memberId), r.weight, shiai, settings);
+    let resultCell;
+    if(!r.result) resultCell = '<span style="color:var(--ink-dim);">—</span>';
+    else if(shiai) resultCell = `<span style="font-weight:700;">${escapeHtml(r.result)} Points</span>`;
+    else resultCell = `<span style="display:inline-block; padding:2px 8px; border-radius:6px; ${medalStyle(r.result)}">${escapeHtml(r.result)}</span>`;
+    return `<div class="convoc-row">
+      <div class="info">
+        <div class="n">${nameWithBoldSurname(r.name)}${cat?`<span class="tag">${escapeHtml(cat)}</span>`:''}</div>
+        <div class="e">${escapeHtml(weightLabel)}</div>
+      </div>
+      ${resultCell}
+    </div>`;
+  }).join('');
+  const medalsHtml = shiai ? '' : `
+    <div class="medal-breakdown" style="margin-bottom:8px;">
+      <div class="medal-chip" style="${medalStyle('1')}"><span class="mn">🥇 ${gold}</span></div>
+      <div class="medal-chip" style="${medalStyle('2')}"><span class="mn">🥈 ${silver}</span></div>
+      <div class="medal-chip" style="${medalStyle('3')}"><span class="mn">🥉 ${bronze}</span></div>
+    </div>`;
+  return medalsHtml + rows;
+}
+function refreshArchiveResultsBody(archive, aid){
+  const body = document.getElementById(`archiveResultsBody-${aid}`);
+  if(body) body.innerHTML = renderArchiveResultsBody(archive, aid);
+}
+function mountArchiveResultsHandlers(archive, aid){
+  refreshArchiveResultsBody(archive, aid);
+  const sel = document.getElementById(`archiveResultsEventSel-${aid}`);
+  if(sel){
+    sel.addEventListener('change', ()=>{
+      if(!ui.archiveResultsEvent) ui.archiveResultsEvent = {};
+      ui.archiveResultsEvent[aid] = sel.value;
+      refreshArchiveResultsBody(archive, aid);
+    });
+  }
+}
+
+/* ---- Onglet Palmarès ---- */
+function buildArchivePalmaresShellHtml(archive, aid){
+  if(!ui.archivePalmaresSearch) ui.archivePalmaresSearch = {};
+  return `
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="archivePalmaresSearch-${aid}" placeholder="🔍 Rechercher un élève..." value="${escapeHtml(ui.archivePalmaresSearch[aid]||'')}" autocomplete="off">
+    </div>
+    <div id="archivePalmaresList-${aid}" style="margin-top:6px;"></div>
+    <div id="archivePalmaresBody-${aid}" style="margin-top:8px;"></div>
+  `;
+}
+function renderArchivePalmaresList(archive, aid){
+  if(!ui.archivePalmaresSearch) ui.archivePalmaresSearch = {};
+  const q = (ui.archivePalmaresSearch[aid]||'').trim().toLowerCase();
+  if(!q) return '';
+  const matches = archive.members.filter(m=>m.name.toLowerCase().includes(q)).slice(0,8);
+  if(matches.length===0) return '<div class="empty" style="padding:8px 2px;">Aucun élève trouvé.</div>';
+  return matches.map(m=>`<div class="convoc-row" data-action="pick-archive-palmares-member" data-aid="${aid}" data-id="${m.id}" style="cursor:pointer;"><div class="info"><div class="n">${nameWithBoldSurname(m.name)}</div></div></div>`).join('');
+}
+function renderArchivePalmaresBody(archive, aid){
+  if(!ui.archivePalmaresSelectedMember) ui.archivePalmaresSelectedMember = {};
+  const memberId = ui.archivePalmaresSelectedMember[aid];
+  if(!memberId) return '';
+  const m = archive.members.find(x=>x.id===memberId);
+  if(!m) return '';
+  const rows = [];
+  (archive.convocEvents||[]).forEach(ev=>{
+    const r = ev.recipients.find(x=>x.memberId===m.id);
+    if(r && r.response==='present' && r.result){
+      rows.push({ eventName: ev.name, date: ev.date, result: r.result, shiai: isShiaiEvent(ev.name), qualificationFor: r.qualificationFor||'' });
+    }
+  });
+  rows.sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const stages = (archive.stages||[]).filter(s=> s.validated && (s.participants||[]).some(p=>p.memberId===m.id)).sort((a,b)=>(b.dateStart||'').localeCompare(a.dateStart||''));
+  const beltHistory = [...(m.beltHistory||[])].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  if(rows.length===0 && stages.length===0 && beltHistory.length===0){
+    return `<h2 style="font-size:14px; margin-top:12px;">Palmarès — ${nameWithBoldSurname(m.name)}</h2><div class="empty">Aucun résultat enregistré.</div>`;
+  }
+  return `<h2 style="font-size:14px; margin-top:12px;">Palmarès — ${nameWithBoldSurname(m.name)}</h2>`
+    + rows.map(r=>`
+    <div class="convoc-row">
+      <div class="info">
+        <div class="n">${escapeHtml(r.eventName)}</div>
+        <div class="e">${r.date?fmtDate(r.date):''}</div>
+        ${r.qualificationFor ? `<div style="font-size:12px; color:#6B8F3D; font-weight:600;">🎫 Qualifié(e) pour : ${escapeHtml(r.qualificationFor)}</div>` : ''}
+      </div>
+      <span class="tag" style="${r.shiai?'':medalStyle(r.result)}">${escapeHtml(r.result)}${r.shiai?' Points':''}</span>
+    </div>`).join('')
+    + (stages.length ? `<h2 style="font-size:13px; margin-top:12px;">Stages</h2>` + stages.map(s=>`
+    <div class="convoc-row"><div class="info"><div class="n">${escapeHtml(s.name)}</div><div class="e">${s.dateStart?fmtDate(s.dateStart):''}${s.dateEnd&&s.dateEnd!==s.dateStart?' au '+fmtDate(s.dateEnd):''}</div></div></div>`).join('') : '')
+    + (beltHistory.length ? `<h2 style="font-size:13px; margin-top:12px;">Passages de grade</h2>` + beltHistory.map(bh=>`
+    <div class="convoc-row"><div class="info"><div class="n">🥋 Obtient sa ceinture ${escapeHtml((beltLabelFor(bh.belt)||'').toLowerCase())}</div><div class="e">${bh.date?fmtDate(bh.date):''}</div></div></div>`).join('') : '');
+}
+function refreshArchivePalmaresList(archive, aid){
+  const wrap = document.getElementById(`archivePalmaresList-${aid}`);
+  if(!wrap) return;
+  wrap.innerHTML = renderArchivePalmaresList(archive, aid);
+  wrap.querySelectorAll('[data-action="pick-archive-palmares-member"]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      if(!ui.archivePalmaresSelectedMember) ui.archivePalmaresSelectedMember = {};
+      ui.archivePalmaresSelectedMember[aid] = row.dataset.id;
+      const m = archive.members.find(x=>x.id===row.dataset.id);
+      const input = document.getElementById(`archivePalmaresSearch-${aid}`);
+      if(input && m) input.value = m.name;
+      wrap.innerHTML = '';
+      refreshArchivePalmaresBody(archive, aid);
+    });
+  });
+}
+function refreshArchivePalmaresBody(archive, aid){
+  const body = document.getElementById(`archivePalmaresBody-${aid}`);
+  if(body) body.innerHTML = renderArchivePalmaresBody(archive, aid);
+}
+function mountArchivePalmaresHandlers(archive, aid){
+  refreshArchivePalmaresBody(archive, aid);
+  const input = document.getElementById(`archivePalmaresSearch-${aid}`);
+  if(input){
+    input.addEventListener('input', ()=>{
+      if(!ui.archivePalmaresSearch) ui.archivePalmaresSearch = {};
+      ui.archivePalmaresSearch[aid] = input.value;
+      refreshArchivePalmaresList(archive, aid);
+    });
+  }
+}
+
+/* ---- Menu à onglets + assemblage ---- */
+function renderArchiveTabsShellHtml(archive){
+  const aid = archive.id;
+  if(!ui.archiveActiveTab) ui.archiveActiveTab = {};
+  const activeTab = ui.archiveActiveTab[aid] || '';
+  const tabs = [
+    { key:'groupe', label:'Groupe' },
+    { key:'presence', label:'Présence' },
+    { key:'resultats', label:'Résultats & médailles' },
+    { key:'palmares', label:'Palmarès' }
+  ];
+  return `
+    <div class="row" style="margin-top:12px; flex-wrap:wrap; gap:6px;">
+      ${tabs.map(t=>`<button class="ghost icon-btn" data-action="archive-tab" data-aid="${aid}" data-tab="${t.key}" style="flex:1; min-width:120px; ${activeTab===t.key?'background:var(--tatami-dim); border-color:var(--tatami); color:var(--tatami);':''} font-size:12.5px;">${escapeHtml(t.label)}</button>`).join('')}
+    </div>
+    <div id="archiveTabBody-${aid}" style="margin-top:10px;">
+      ${activeTab ? '' : '<div class="empty">Choisis une catégorie ci-dessus pour afficher les données.</div>'}
+    </div>
+  `;
+}
+function refreshArchiveTabBody(archive){
+  const aid = archive.id;
+  if(!ui.archiveActiveTab) ui.archiveActiveTab = {};
+  const activeTab = ui.archiveActiveTab[aid] || '';
+  const body = document.getElementById(`archiveTabBody-${aid}`);
+  if(!body) return;
+  if(!activeTab){ body.innerHTML = '<div class="empty">Choisis une catégorie ci-dessus pour afficher les données.</div>'; return; }
+  if(activeTab==='groupe'){ body.innerHTML = buildArchiveGroupShellHtml(archive, aid); mountArchiveGroupHandlers(archive, aid); }
+  else if(activeTab==='presence'){ body.innerHTML = buildArchivePresenceShellHtml(archive, aid); mountArchivePresenceHandlers(archive, aid); }
+  else if(activeTab==='resultats'){ body.innerHTML = renderArchiveResultsShellHtml(archive, aid); mountArchiveResultsHandlers(archive, aid); }
+  else if(activeTab==='palmares'){ body.innerHTML = buildArchivePalmaresShellHtml(archive, aid); mountArchivePalmaresHandlers(archive, aid); }
 }
 
 function renderArchiveCard(){
@@ -5103,7 +5410,7 @@ function renderArchiveCard(){
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="flex-shrink:0; color:var(--ink-dim); transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
           </div>
         </div>
-        ${expanded ? renderArchiveSummaryHtml(a) : ''}
+        ${expanded ? renderArchiveTabsShellHtml(a) : ''}
       </div>`;
     }).join('')}
   `;
@@ -5136,6 +5443,17 @@ function renderArchiveCard(){
       showToast('Archive supprimée');
     });
   });
+  wrap.querySelectorAll('[data-action="archive-tab"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      if(!ui.archiveActiveTab) ui.archiveActiveTab = {};
+      ui.archiveActiveTab[btn.dataset.aid] = btn.dataset.tab;
+      renderArchiveCard();
+    });
+  });
+  archives.forEach(a=>{
+    if(ui.archiveExpanded[a.id]) refreshArchiveTabBody(a);
+  });
 }
 
 async function importArchiveFile(e){
@@ -5166,7 +5484,6 @@ async function importArchiveFile(e){
     showToast('Impossible de lire ce fichier d’archive');
   }
 }
-
 /* ---------------- Réinitialisation ---------------- */
 const footer = document.createElement('div');
 footer.className = 'settings-foot';
