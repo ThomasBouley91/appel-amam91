@@ -845,6 +845,24 @@ function categoryYearLabelWithVeteran(birthDate, gender){
   if(!vLabel) return base;
   return base ? `${base} - Vétérans ${vLabel}` : `Vétérans ${vLabel}`;
 }
+function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
+  if(viaVeterans){
+    return `🎖️ Vétérans ${veteranLabelForMember(member) || ''}`.trim();
+  }
+  const cat = computeCategory(birthDate);
+  if(!cat) return '';
+  const rank = categoryRank(birthDate);
+  const bands = data.settings.ageBands||[];
+  const cadetIdx = bands.findIndex(b=>b.label.toLowerCase().includes('cadet'));
+  const hideYear = cadetIdx>=0 && rank.bandIdx >= cadetIdx;
+  let base = cat;
+  if(!hideYear){
+    const birthYear = parseInt((birthDate||'').slice(0,4),10);
+    if(birthYear) base = `${cat} (${birthYear})`;
+  }
+  const vLabel = veteranLabelForMember(member||{birthDate, gender});
+  return vLabel ? `${base} - Vétérans ${vLabel}` : base;
+}
 /* ---------------- CRÉNEAUX RÉCURRENTS ---------------- */
 const WEEKDAYS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 function isoWeekday(dateStr){
