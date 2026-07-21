@@ -3958,6 +3958,17 @@ function buildEventRecipientsHtml(ev){
 }
 
 function attachRecipientHandlers(wrap, onAfterChange){
+  wrap.querySelectorAll('[data-action="toggle-convoc-recipients-category"]').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      const evId = el.dataset.event;
+      const label = el.dataset.label;
+      if(!ui.convocCategoryExpanded) ui.convocCategoryExpanded = {};
+      if(!ui.convocCategoryExpanded[evId]) ui.convocCategoryExpanded[evId] = {};
+      ui.convocCategoryExpanded[evId][label] = !ui.convocCategoryExpanded[evId][label];
+      onAfterChange();
+    });
+  });
   wrap.querySelectorAll('[data-action="send-single-convoc"]').forEach(btn=>{
     btn.addEventListener('click', async e=>{
       e.stopPropagation();
