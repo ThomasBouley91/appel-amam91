@@ -2749,8 +2749,7 @@ function renderConvocTab(){
       <div class="convoc-row"${alreadyInvited?' style="opacity:.6;"':''}>
         <input type="checkbox" data-member="${m.id}" ${checked?'checked':''} ${alreadyInvited?'disabled':''}>
         <div class="info">
-          <div class="n">${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(categoryYearLabel(m.birthDate))}</span>` : ''}${alreadyInvited ? `<span class="tag">✓ Déjà convoqué(e)</span>` : ''}</div>
-          <div class="e">${m.email ? escapeHtml(m.email) : 'Pas d’email renseigné'}</div>
+<div class="n">${nameWithBoldSurname(m.name)}${m.belt ? beltSwatchHtml(m.belt, true) : ''}${cat ? `<span class="tag">${escapeHtml(categoryYearLabelWithVeteran(m.birthDate, m.gender))}</span>` : ''}${alreadyInvited ? `<span class="tag">✓ Déjà convoqué(e)</span>` : ''}</div>          <div class="e">${m.email ? escapeHtml(m.email) : 'Pas d’email renseigné'}</div>
         </div>
       </div>`;
     })) : ''}
