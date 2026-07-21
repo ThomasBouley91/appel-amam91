@@ -4624,11 +4624,7 @@ function buildResultRowsHtml(presents, birthDateOf, shiai){
   return { rows, gold, silver, bronze, categoryLabels: order };
 }
 function sortedCategoryLabels(labels){
-  return [...labels].sort((a,b)=>{
-    const ia = (data.settings.ageBands||[]).findIndex(x=>x.label===a);
-    const ib = (data.settings.ageBands||[]).findIndex(x=>x.label===b);
-    return ia-ib;
-  });
+  return [...labels].sort((a,b)=> categoryBandSortIndex(a) - categoryBandSortIndex(b));
 }
 
 async function generateEventResultsPdf(){
