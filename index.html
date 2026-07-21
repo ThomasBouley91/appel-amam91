@@ -820,6 +820,33 @@ function memberAge(birthDate){
   return data.settings.seasonStartYear - birthYear;
 }
 
+/* ---------------- CATÉGORIE VÉTÉRANS (FFJDA) ---------------- */
+const VETERAN_BRACKETS = [
+  { min:30, max:34, num:1 }, { min:35, max:39, num:2 }, { min:40, max:44, num:3 },
+  { min:45, max:49, num:4 }, { min:50, max:54, num:5 }, { min:55, max:59, num:6 },
+  { min:60, max:64, num:7 }, { min:65, max:69, num:8 }, { min:70, max:75, num:9 },
+  { min:76, max:999, num:10 }
+];
+function veteranBracketFor(age){
+  return VETERAN_BRACKETS.find(b=>age>=b.min && age<=b.max) || null;
+}
+function veteranLabelForMember(m){
+  if(!m || !m.birthDate) return '';
+  const age = memberAge(m.birthDate);
+  if(age===null || age<30) return '';
+  const bracket = veteranBracketFor(age);
+  if(!bracket) return '';
+  const letter = m.gender==='F' ? 'F' : 'M';
+  return `${letter}${bracket.num}`;
+}
+function categoryYearLabelWithVeteran(birthDate, gender){
+  const base = categoryYearLabel(birthDate);
+  const vLabel = veteranLabelForMember({ birthDate, gender });
+  if(!vLabel) return base;
+  return base ? `${base} - Vétérans ${vLabel}` : `Vétérans ${vLabel}`;
+}
+}
+
 /* ---------------- CRÉNEAUX RÉCURRENTS ---------------- */
 const WEEKDAYS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 function isoWeekday(dateStr){
