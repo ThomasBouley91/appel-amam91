@@ -2399,7 +2399,8 @@ function findOrCreateConvocEvent(name, date){
 function getOrCreateRecipientToken(ev, member){
   let r = ev.recipients.find(x=>x.memberId===member.id);
   if(!r){
-    r = { memberId: member.id, name: member.name, email: member.email||'', token: genToken(), opened:false, openedAt:'', response:'', respondedAt:'' };
+    const viaVeterans = !!(ui.convocVeteranFlag && ui.convocVeteranFlag[member.id]);
+    r = { memberId: member.id, name: member.name, email: member.email||'', token: genToken(), opened:false, openedAt:'', response:'', respondedAt:'', viaVeterans };
     ev.recipients.push(r);
   } else if(member.email && r.email!==member.email){
     r.email = member.email;
