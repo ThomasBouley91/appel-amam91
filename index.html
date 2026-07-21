@@ -772,6 +772,7 @@ function ensureSettings(){
   if(!data.clubContact) data.clubContact = "01.64.57.32.49 — amam91540@gmail.com\nThomas : 06.35.47.60.04";
   if(!data.convocEvents) data.convocEvents = [];
   if(!data.stages) data.stages = [];
+  if(!data.archivedSeasons) data.archivedSeasons = [];
   if(!data.settings.deletedCalendarCompetitions) data.settings.deletedCalendarCompetitions = [];
   data.convocEvents.forEach(ev=>{ if(ev.archived===undefined) ev.archived = false; });
   data.groups.forEach(g=>{ g.recurrence ||= []; });
