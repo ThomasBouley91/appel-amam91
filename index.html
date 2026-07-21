@@ -4282,7 +4282,10 @@ async function generateConvocEventPdf(eventId){
       return memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr');
     });
     const rowsHtml = sorted.map(r=>{
-      const cat = categoryYearLabel(birthDateOf(r));
+      const memberForCat = data.members.find(x=>x.id===r.memberId);
+      const cat = r.viaVeterans
+        ? `🎖️ Vétérans ${veteranLabelForMember(memberForCat) || ''}`.trim()
+        : categoryYearLabelWithVeteran(birthDateOf(r), memberForCat ? memberForCat.gender : '');
       const statusLabel = r.response==='present' ? '✅ Présent(e)' : (r.response==='absent' ? '❌ Absent(e)' : '⏳ En attente');
       return `<tr><td>${nameWithBoldSurname(r.name)}</td><td>${escapeHtml(cat||'')}</td><td>${statusLabel}</td></tr>`;
     }).join('');
