@@ -3925,12 +3925,15 @@ async function generateMemberPalmaresPdf(){
       });
     }
 
+    const catDisplay = categoryYearLabelWithVeteran(m.birthDate, m.gender);
+    const beltDisplay = m.belt ? beltLabelFor(m.belt) : '';
     const buildContextHtml = (isFirst)=> !isFirst ? '' : `
       <div class="recap-header">
         ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
         <div>
           <div class="rh-club">${escapeHtml(data.clubName||'')}</div>
           <div class="rh-sub">Palmarès — ${genderBadgeHtml(m.gender)} ${nameWithBoldSurname(m.name)}${g?' — '+escapeHtml(g.name):''}</div>
+          <div class="rh-sub" style="margin-top:2px;">${catDisplay?escapeHtml(catDisplay):''}${catDisplay&&beltDisplay?' · ':''}${beltDisplay?'Ceinture '+escapeHtml(beltDisplay.toLowerCase()):''}</div>
         </div>
       </div>`;
 
