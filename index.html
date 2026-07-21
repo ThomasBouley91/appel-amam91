@@ -2490,6 +2490,7 @@ function groupedCategoriesAvailable(){
     const hasAny = data.members.some(m=>groupedCategoryLabel(m.birthDate)===b.label);
     if(hasAny && !labels.includes(b.label)) labels.push(b.label);
   });
+  if(data.members.some(m=>veteranLabelForMember(m))) labels.push('Vétérans');
   return labels;
 }
 function memberMatchesGroupedCategory(member, groupLabel){
