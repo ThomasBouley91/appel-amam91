@@ -850,7 +850,6 @@ function categoryYearLabelWithVeteran(birthDate, gender){
   return idx===-1 ? 999 : idx;
 }
 function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
-function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
   if(viaVeterans){
     return `🎖️ Vétérans ${veteranLabelForMember(member) || ''}`.trim();
   }
