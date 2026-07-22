@@ -3057,6 +3057,19 @@ function applyConvocSectionsVisibility(){
   if(newBody) newBody.style.display = newHidden ? 'none' : 'block';
   if(newBtn) newBtn.textContent = newHidden ? '👁️ Afficher' : '🙈 Masquer';
 }
+  function resetCompetitionFormFields(){
+  document.getElementById('convocEvent').value = '';
+  document.getElementById('convocDate').value = '';
+  document.getElementById('convocVille').value = '';
+  document.getElementById('convocLieu').value = '';
+  ui.convocSchedule = [];
+  saveConvocDraft();
+  renderConvocSchedule();
+  const noteWrap = document.getElementById('calendarCompetitionNote');
+  if(noteWrap) noteWrap.innerHTML = '';
+  showToast('Champs réinitialisés');
+}
+function pickCalendarCompetition(idx){
 function pickCalendarCompetition(idx){
   const c = COMPETITION_CALENDAR[idx];
   if(!c) return;
