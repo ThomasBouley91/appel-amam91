@@ -3221,7 +3221,7 @@ function buildCalendarGridHtml(monthBlocks, logoSrc, title){
                 : (Array.isArray(en.ageCategories) && en.ageCategories.length ? en.ageCategories.join(', ') : 'Pas de catégorie');
               return `
               <div class="pdfcal-event type-${en.type}">
-                <div class="pce-day">${DAY_ABBR_FR[d.getDay()]} ${d.getDate()}${en.validated?' <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#3F8F3F; vertical-align:middle;"></span>':''}</div>
+                <div class="pce-day">${DAY_ABBR_FR[d.getDay()]} ${d.getDate()}</div>
                 <div class="pce-name">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}</div>
                 ${en.city ? `<div class="pce-city">${escapeHtml(en.city)}</div>` : ''}
                 <div class="pce-cat"${hasCategory?'':' style="color:#B3492F; font-weight:700;"'}>${escapeHtml(catLabel)}</div>
