@@ -3291,7 +3291,7 @@ function renderResultsTab(){
   const sel = document.getElementById('resultsEventSel');
   if(!sel) return;
   renderResultsDashboard();
-  const events = [...(data.convocEvents||[])].sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||'').localeCompare(a.createdAt||''));
+  const events = [...(data.convocEvents||[])].filter(ev=>!ev.resultsArchived).sort((a,b)=> (b.date||'').localeCompare(a.date||'') || (b.createdAt||'').localeCompare(a.createdAt||''));
   const prev = ui.resultsEventId;
   if(events.length===0){
     sel.innerHTML = '<option value="">Aucun événement pour l’instant</option>';
@@ -3300,8 +3300,9 @@ function renderResultsTab(){
     if(events.some(ev=>ev.id===prev)) sel.value = prev;
   }
   ui.resultsEventId = sel.value || null;
-  sel.onchange = ()=>{ ui.resultsEventId = sel.value; renderResultsList(); };
+  sel.onchange = ()=>{ ui.resultsEventId = sel.value; renderResultsList(); updateArchiveResultsButton(); };
   renderResultsList();
+  updateArchiveResultsButton();
 
   const searchInput = document.getElementById('resultsSearchInput');
   searchInput.oninput = ()=> renderResultsSearchList(searchInput.value.trim());
@@ -3314,6 +3315,7 @@ function renderResultsTab(){
   renderRecapCategoryFilter();
   initAddResultForm();
   initStageForm();
+  renderResultsHistoryCard();
 }
 
 function findOrCreateStage(name, dateStart, dateEnd){
