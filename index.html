@@ -3258,24 +3258,34 @@ function renderResultsHistoryCard(){
   ui.resultsHistorySelectedId = selectedId;
   const selectedEv = selectedId ? archived.find(ev=>ev.id===selectedId) : null;
 
-  wrap.innerHTML = `
+  const headerHtml = `
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <h2 style="margin:0;">Historique des compétitions</h2>
       <button class="ghost icon-btn" id="toggleResultsHistoryBtn" title="${hidden?'Afficher':'Masquer'}" style="flex-shrink:0; padding:8px 9px; font-size:13px;">${hidden?'👁️ Afficher':'🙈 Masquer'}</button>
-    </div>
-    ${hidden ? '' : `
-    ${archived.length===0 ? '<div class="empty" style="margin-top:10px;">Aucune compétition archivée pour l’instant.</div>' : `
+    </div>`;
+
+  let bodyHtml = '';
+  if(!hidden){
+    if(archived.length===0){
+      bodyHtml = '<div class="empty" style="margin-top:10px;">Aucune compétition archivée pour l’instant.</div>';
+    } else {
+      const optionsHtml = archived.map(ev=>`<option value="${ev.id}" ${ev.id===selectedId?'selected':''}>${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</option>`).join('');
+      const detailHtml = selectedEv ? renderResultsHistoryDetail(selectedEv) : '';
+      bodyHtml = `
     <div class="row" style="margin-top:10px;">
       <select id="resultsHistorySel" style="flex:1;">
         <option value="">— Choisir une compétition archivée —</option>
-        ${archived.map(ev=>`<option value="${ev.id}" ${ev.id===selectedId?'selected':''}>${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</option>`).join('')}
+        ${optionsHtml}
       </select>
     </div>
     <div id="results-history-detail" style="margin-top:10px;">
-      ${selectedEv ? renderResultsHistoryDetail(selectedEv) : ''}
-    </div>`}
-    `}
-  `;
+      ${detailHtml}
+    </div>`;
+    }
+  }
+
+  wrap.innerHTML = headerHtml + bodyHtml;
+
   const toggleBtn = document.getElementById('toggleResultsHistoryBtn');
   if(toggleBtn) toggleBtn.addEventListener('click', ()=>{ saveResultsHistoryHidden(!hidden); renderResultsHistoryCard(); });
   const sel = document.getElementById('resultsHistorySel');
