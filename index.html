@@ -1046,6 +1046,7 @@ document.getElementById('themeToggle').addEventListener('click', ()=>{
 
 function renderAll(){
   if(!ready) return;
+  renderHeaderSeasonLabel();
   renderGroupsTab();
   renderAgeSettings();
   renderImportedCompetitionsSettings();
