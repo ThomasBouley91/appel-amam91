@@ -3942,7 +3942,7 @@ async function generateMemberPalmaresPdf(){
     const margin = 24;
     await paginateRowsIntoPdf(pdf, {
       rows: rowsArr,
-      tableHeadHtml: '<th>Compétition</th><th>Date</th><th>Résultat</th>',
+      tableHeadHtml: '<th>Compétition</th><th>Date</th><th>Ville</th><th>Résultat</th>',
       buildContextHtml,
       containerClass: 'recap-doc',
       containerWidthPx: 700,
