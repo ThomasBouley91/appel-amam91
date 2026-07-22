@@ -3313,6 +3313,13 @@ function attachResultsHistoryDetailHandlers(){
       showToast(`« ${ev.name} » remise dans la liste des événements`);
     });
   });
+  wrap.querySelectorAll('[data-action="download-history-event-pdf"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      generateEventResultsPdfForId(btn.dataset.id);
+    });
+  });
+}
 }
 function renderResultsTab(){
   const sel = document.getElementById('resultsEventSel');
