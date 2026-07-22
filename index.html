@@ -2657,8 +2657,31 @@ function updateConvocLinks(){
 function renderConvocSchedule(){
   const wrap = document.getElementById('convoc-schedule');
   if(!wrap) return;
-  const times = convocTimeOptions();
   const cats = groupedCategoriesAvailable();
+  let categoryValue = 'all';
+  if(ui.convocCategory && (ui.convocCategory==='all' || cats.includes(ui.convocCategory))) categoryValue = ui.convocCategory;
+  ui.convocCategory = categoryValue;
+
+  const membersRaw = categoryValue==='all' ? data.members : data.members.filter(m=>memberMatchesGroupedCategory(m, categoryValue));
+  const members = categoryValue==='all'
+    ? sortMembersByCategoryThenName(membersRaw)
+    : [...membersRaw].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+
+  const isAlreadyInvited = m => !!(existingEvent && existingEvent.recipients.some(r=>r.memberId===m.id));
+  const selectedCount = members.filter(m=> isAlreadyInvited(m) || ui.convocChecked[m.id]===true).length;
+  const expanded = !!ui.convocMembersExpanded;
+
+  membersWrap.innerHTML = `
+    <h2 style="margin-bottom:10px;">Destinataires</h2>
+    <div class="row" style="margin:0 0 10px;">
+      <div style="flex:1">
+        <label class="small">Catégorie d'âge</label>
+        <select id="convocCategorySel">
+          <option value="all" ${categoryValue==='all'?'selected':''}>Toutes les catégories</option>
+          ${cats.map(c=>`<option value="${escapeHtml(c)}" ${categoryValue===c?'selected':''}>${escapeHtml(bandYearRangeLabel(c))}</option>`).join('')}
+        </select>
+      </div>
+    </div>
   wrap.innerHTML = ui.convocSchedule.map((r,i)=>`
     <div class="schedule-block" data-idx="${i}">
       <div class="row" style="margin:0;">
