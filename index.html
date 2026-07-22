@@ -846,6 +846,7 @@ function ensureSettings(){
   if(!data.calendarEvents) data.calendarEvents = [];
   if(!data.settings.deletedCalendarCompetitions) data.settings.deletedCalendarCompetitions = [];
   if(!data.settings.competitionOverrides) data.settings.competitionOverrides = {};
+  if(!data.settings.competitionProfiles) data.settings.competitionProfiles = {};
   data.convocEvents.forEach(ev=>{ if(ev.archived===undefined) ev.archived = false; });
   data.groups.forEach(g=>{ g.recurrence ||= []; });
 }
@@ -1501,7 +1502,7 @@ function renderImportedCompetitionRow(c){
   return `
   <div class="convoc-row" style="align-items:flex-start;">
     <div class="info">
-      <div class="n">🏆 ${escapeHtml(effectiveCompetitionName(c))}${validatedBadgeHtml(validated)}${c.level?' <span class="tag">'+escapeHtml(c.level)+'</span>':''}</div>
+      <div class="n">🏆 ${escapeHtml(effectiveCompetitionName(c))}${validatedBadgeHtml(validated)}</div>
       <div class="e">${c.date?fmtDate(c.date):escapeHtml(c.dayLabel)} · ${escapeHtml(effectiveCompetitionCity(c))}</div>
       <div style="margin-top:4px;">${calendarCategoryTagsHtml(importedCompetitionAgeCategories(c))}</div>
     </div>
@@ -1535,15 +1536,9 @@ function renderManualEventRow(e){
         <span class="field-label">Nom de l'événement</span>
         <input type="text" data-field="name" value="${escapeHtml(e.name||'')}">
       </div>
-      <div class="row" style="margin:0;">
-        <div style="flex:1;">
-          <span class="field-label">Ville</span>
-          <input type="text" data-field="city" value="${escapeHtml(e.city||'')}">
-        </div>
-        <div style="flex:1;">
-          <span class="field-label">Niveau (optionnel)</span>
-          <input type="text" data-field="level" value="${escapeHtml(e.level||'')}">
-        </div>
+      <div>
+        <span class="field-label">Ville</span>
+        <input type="text" data-field="city" value="${escapeHtml(e.city||'')}">
       </div>
       <div>
         <span class="field-label">Adresse (optionnel)</span>
@@ -1561,7 +1556,7 @@ function renderManualEventRow(e){
   return `
   <div class="convoc-row" style="align-items:flex-start;">
     <div class="info">
-      <div class="n">${typeBadge} ${escapeHtml(e.name)}${validatedBadgeHtml(validated)}${e.level?' <span class="tag">'+escapeHtml(e.level)+'</span>':''} <span class="tag" style="background:var(--tatami-dim); color:var(--tatami);">Ajouté</span></div>
+      <div class="n">${typeBadge} ${escapeHtml(e.name)}${validatedBadgeHtml(validated)} <span class="tag" style="background:var(--tatami-dim); color:var(--tatami);">Ajouté</span></div>
       <div class="e">${e.date?fmtDate(e.date):''}${e.city?' · '+escapeHtml(e.city):''}</div>
       <div style="margin-top:4px;">${calendarCategoryTagsHtml(e.ageCategories!==undefined?e.ageCategories:[])}</div>
     </div>
@@ -1592,15 +1587,9 @@ function renderCalendarAddForm(){
       <span class="field-label">Nom de l'événement</span>
       <input type="text" data-field="name" placeholder="Ex. Tournoi de printemps">
     </div>
-    <div class="row" style="margin:0;">
-      <div style="flex:1;">
-        <span class="field-label">Ville</span>
-        <input type="text" data-field="city">
-      </div>
-      <div style="flex:1;">
-        <span class="field-label">Niveau (optionnel)</span>
-        <input type="text" data-field="level" placeholder="Départemental…">
-      </div>
+    <div>
+      <span class="field-label">Ville</span>
+      <input type="text" data-field="city">
     </div>
     <div>
       <span class="field-label">Adresse (optionnel)</span>
@@ -1721,22 +1710,47 @@ function renderImportedCompetitionsSettings(){
   const addForm = wrap.querySelector('[data-form="add-calendar-event"]');
   if(addForm){
     wireAgeCategoryExclusivity(addForm);
+    const addFormApplyProfile = ()=>{
+      const nameVal = addForm.querySelector('[data-field="name"]').value.trim();
+      const cityVal = addForm.querySelector('[data-field="city"]').value.trim();
+      if(!nameVal) return;
+      const profile = getCompetitionProfile(nameVal, cityVal);
+      if(!profile) return;
+      const addressInput = addForm.querySelector('[data-field="address"]');
+      if(profile.address && !addressInput.value.trim()) addressInput.value = profile.address;
+      const alreadyHasCats = readAgeCategoriesFromForm(addForm);
+      const noneChecked = alreadyHasCats!=='all' && (!Array.isArray(alreadyHasCats) || alreadyHasCats.length===0);
+      if(profile.ageCategories && noneChecked){
+        addForm.querySelectorAll('[data-cat]').forEach(cb=>{
+          if(profile.ageCategories==='all') cb.checked = (cb.dataset.cat==='ALL');
+          else cb.checked = profile.ageCategories.includes(cb.dataset.cat);
+        });
+      }
+      showToast(`Infos reprises d’une compétition déjà connue`);
+    };
+    const addNameInput = addForm.querySelector('[data-field="name"]');
+    const addCityInput = addForm.querySelector('[data-field="city"]');
+    if(addNameInput) addNameInput.addEventListener('blur', addFormApplyProfile);
+    if(addCityInput) addCityInput.addEventListener('blur', addFormApplyProfile);
     addForm.querySelector('[data-action="save-add-calendar-event"]').addEventListener('click', ()=>{
       const name = addForm.querySelector('[data-field="name"]').value.trim();
       const dateVal = addForm.querySelector('[data-field="date"]').value;
       if(!name || !dateVal){ showToast('Renseigne au moins le nom et la date'); return; }
+      const cityVal = addForm.querySelector('[data-field="city"]').value.trim();
+      const addressVal = addForm.querySelector('[data-field="address"]').value.trim();
+      const ageCategoriesVal = readAgeCategoriesFromForm(addForm);
       const entry = {
         id: uid(),
         type: addForm.querySelector('[data-field="type"]').value,
         name,
         date: dateVal,
-        city: addForm.querySelector('[data-field="city"]').value.trim(),
-        level: addForm.querySelector('[data-field="level"]').value.trim(),
-        address: addForm.querySelector('[data-field="address"]').value.trim(),
-        ageCategories: readAgeCategoriesFromForm(addForm)
+        city: cityVal,
+        address: addressVal,
+        ageCategories: ageCategoriesVal
       };
       if(!data.calendarEvents) data.calendarEvents = [];
       data.calendarEvents.push(entry);
+      saveCompetitionProfile(name, cityVal, { address: addressVal, ageCategories: ageCategoriesVal });
       saveData();
       ui.addingCalendarEvent = false;
       renderImportedCompetitionsSettings();
@@ -1783,6 +1797,8 @@ function renderImportedCompetitionsSettings(){
     if(!data.settings.competitionOverrides) data.settings.competitionOverrides = {};
     const prevOverride = data.settings.competitionOverrides[saveBtn.dataset.key] || {};
     data.settings.competitionOverrides[saveBtn.dataset.key] = { ...prevOverride, name, city, address, ageCategories };
+    const rawComp = COMPETITION_CALENDAR.find(c=>competitionKey(c)===saveBtn.dataset.key);
+    if(rawComp) saveCompetitionProfile(rawComp.name, rawComp.city, { address, ageCategories });
     saveData();
     ui.editingCompetitionKey = null;
     renderImportedCompetitionsSettings();
@@ -1842,9 +1858,9 @@ function renderImportedCompetitionsSettings(){
       entry.name = manualEditForm.querySelector('[data-field="name"]').value.trim();
       entry.date = manualEditForm.querySelector('[data-field="date"]').value;
       entry.city = manualEditForm.querySelector('[data-field="city"]').value.trim();
-      entry.level = manualEditForm.querySelector('[data-field="level"]').value.trim();
       entry.address = manualEditForm.querySelector('[data-field="address"]').value.trim();
       entry.ageCategories = readAgeCategoriesFromForm(manualEditForm);
+      saveCompetitionProfile(entry.name, entry.city, { address: entry.address, ageCategories: entry.ageCategories });
       saveData();
       ui.editingCompetitionKey = null;
       renderImportedCompetitionsSettings();
@@ -2727,7 +2743,7 @@ function buildCalendarTimelineHtml(entries){
         <div class="cal-event type-${en.type}">
           <div class="cal-daybox"><div class="d">${day}</div><div class="m">${MONTH_NAMES_FR[d.getMonth()].slice(0,3)}</div></div>
           <div class="cal-info">
-            <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}${validatedBadgeHtml(en.validated || isPassed)}${en.level?' <span class="tag">'+escapeHtml(en.level)+'</span>':''}</div>
+            <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}${validatedBadgeHtml(en.validated || isPassed)}</div>
             <div class="e">${escapeHtml(en.city||'')}</div>
             <div class="cats">${catsHtml}</div>
           </div>
@@ -3564,7 +3580,9 @@ function effectiveCompetitionCity(c){
 }
 function effectiveCompetitionAddress(c){
   const o = getCompetitionOverride(c);
-  if(o.address !== undefined && o.address !== null) return o.address;
+  if(o.address) return o.address;
+  const profile = getCompetitionProfile(c.name, c.city);
+  if(profile && profile.address) return profile.address;
   return KNOWN_COMPETITION_ADDRESSES[(c.city||'').trim().toUpperCase()] || '';
 }
 function competitionKey(c){
@@ -3575,11 +3593,60 @@ function visibleCompetitionCalendar(){
   return COMPETITION_CALENDAR.filter(c => !deleted.includes(competitionKey(c)));
 }
 
+/* ---------------- FICHE COMPÉTITION RÉCURRENTE (persistance inter-saisons) ---------------- */
+// Une compétition revient chaque année sous (à peu près) le même nom, mais à une date différente.
+// La fiche est indexée par nom+ville normalisés (sans la date) afin que l'adresse et les catégories
+// d'âge saisies une année se retrouvent automatiquement les années suivantes.
+function normalizeForMatch(s){
+  return String(s||'')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ')
+    .trim()
+    .replace(/\s+/g,' ');
+}
+function competitionProfileKey(name, city){
+  const n = normalizeForMatch(name);
+  if(!n) return null;
+  return `${n}|${normalizeForMatch(city)}`;
+}
+function getCompetitionProfile(name, city){
+  const key = competitionProfileKey(name, city);
+  if(!key) return null;
+  return (data.settings.competitionProfiles||{})[key] || null;
+}
+function saveCompetitionProfile(name, city, fields){
+  const key = competitionProfileKey(name, city);
+  if(!key) return;
+  if(!data.settings.competitionProfiles) data.settings.competitionProfiles = {};
+  const existing = data.settings.competitionProfiles[key] || {};
+  const next = { ...existing };
+  let changed = false;
+  if(fields.address !== undefined && fields.address.trim() && fields.address.trim()!==existing.address){
+    next.address = fields.address.trim();
+    changed = true;
+  }
+  const hasCats = fields.ageCategories==='all' || (Array.isArray(fields.ageCategories) && fields.ageCategories.length>0);
+  if(hasCats && JSON.stringify(fields.ageCategories)!==JSON.stringify(existing.ageCategories)){
+    next.ageCategories = fields.ageCategories;
+    changed = true;
+  }
+  if(changed){
+    next.updatedAt = new Date().toISOString();
+    data.settings.competitionProfiles[key] = next;
+  }
+}
+
 /* ---------------- CALENDRIER : compétitions & stages, catégories d'âge ---------------- */
 function importedCompetitionAgeCategories(c){
   const o = getCompetitionOverride(c);
   if(o.ageCategories==='all') return 'all';
   if(Array.isArray(o.ageCategories) && o.ageCategories.length) return o.ageCategories;
+  const profile = getCompetitionProfile(c.name, c.city);
+  if(profile && profile.ageCategories){
+    if(profile.ageCategories==='all') return 'all';
+    if(Array.isArray(profile.ageCategories) && profile.ageCategories.length) return profile.ageCategories;
+  }
   const guessed = matchConfiguredBandLabel(c.name + ' ' + (c.details||[]).join(' '));
   return guessed ? [guessed] : [];
 }
@@ -3631,14 +3698,14 @@ function getAllCalendarEntries(){
   const imported = visibleCompetitionCalendar().map(c=>({
     key: competitionKey(c), kind:'imported', type:'competition',
     name: effectiveCompetitionName(c), date: c.date||'', dayLabel: c.dayLabel||'',
-    city: effectiveCompetitionCity(c), level: c.level||'',
+    city: effectiveCompetitionCity(c),
     ageCategories: importedCompetitionAgeCategories(c),
     validated: getCompetitionOverride(c).validated === true
   }));
   const manual = (data.calendarEvents||[]).map(e=>({
     key: 'manual-'+e.id, kind:'manual', id:e.id, type: e.type||'competition',
     name: e.name||'', date: e.date||'', dayLabel:'',
-    city: e.city||'', level: e.level||'',
+    city: e.city||'',
     ageCategories: e.ageCategories!==undefined ? e.ageCategories : [],
     validated: e.validated === true
   }));
@@ -3723,6 +3790,8 @@ function pickCalendarCompetition(idx){
   if(c.date) document.getElementById('convocDate').value = c.date;
   document.getElementById('convocVille').value = effectiveCompetitionCity(c);
   document.getElementById('convocLieu').value = effectiveCompetitionAddress(c);
+  saveCompetitionProfile(c.name, c.city, { address: effectiveCompetitionAddress(c), ageCategories: importedCompetitionAgeCategories(c) });
+  saveData();
   const fullText = c.name + ' ' + c.details.join(' ');
   const bandLabel = matchConfiguredBandLabel(fullText);
   const categorieValue = bandLabel ? bandYearRangeLabel(bandLabel) : '';
@@ -3757,11 +3826,13 @@ function pickCalendarEntryOther(entry){
   if(e.date) document.getElementById('convocDate').value = e.date;
   document.getElementById('convocVille').value = e.city||'';
   document.getElementById('convocLieu').value = e.address||'';
+  saveCompetitionProfile(e.name, e.city, { address: e.address, ageCategories: e.ageCategories });
+  saveData();
   saveConvocDraft();
   const noteWrap = document.getElementById('calendarCompetitionNote');
   if(noteWrap){
     noteWrap.innerHTML = `<div style="background:#F1F4EA; border-radius:8px; padding:10px 12px; margin-top:8px; font-size:12.5px; line-height:1.5;">
-      📋 <strong>Infos du calendrier</strong> — ${e.type==='stage'?'Stage':'Compétition'} ajouté(e) manuellement${e.level?' · Niveau : '+escapeHtml(e.level):''}<br><em>Pas d'horaires de pesée disponibles — ajoute-les manuellement si besoin.</em>
+      📋 <strong>Infos du calendrier</strong> — ${e.type==='stage'?'Stage':'Compétition'} ajouté(e) manuellement<br><em>Pas d'horaires de pesée disponibles — ajoute-les manuellement si besoin.</em>
     </div>`;
   }
   saveNewConvocFormHidden(false);
@@ -3778,7 +3849,7 @@ function renderCalendarOtherSearchResults(query){
   wrap.innerHTML = matches.slice(0,50).map(en=>`
     <div class="convoc-row" data-action="pick-calendar-other" data-key="${escapeHtml(en.key)}" style="cursor:pointer;">
       <div class="info">
-        <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}${en.level?' <span class="tag">'+escapeHtml(en.level)+'</span>':''}</div>
+        <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}</div>
         <div class="e">${en.date?fmtDate(en.date):''} · ${escapeHtml(en.city||'')}</div>
       </div>
     </div>`).join('') || '<div class="empty" style="padding:10px;">Aucun résultat.</div>';
@@ -6699,7 +6770,8 @@ footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
       seasonStartYear: data.settings.seasonStartYear,
       theme: data.settings.theme,
       deletedCalendarCompetitions: [],
-      competitionOverrides: {}
+      competitionOverrides: {},
+      competitionProfiles: data.settings.competitionProfiles || {}
     }
   };
   await saveData();
