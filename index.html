@@ -469,14 +469,15 @@
         <h2 style="margin:0;">Convoquer</h2>
         <button class="ghost icon-btn" id="addManualConvocBtn" title="Ajouter une compétition à la main" style="flex-shrink:0; padding:8px 9px; font-size:16px; font-weight:800;">+</button>
       </div>
-      <div style="position:relative; margin-top:4px;">
+      <div class="category-divider" style="margin-top:10px;">📅 Compétition</div>
+      <div style="position:relative;">
         <label class="small">Choisir une compétition à venir (dans le mois, optionnel)</label>
         <input type="text" id="calendarCompetitionInput" placeholder="Clique ou tape un nom / une ville..." autocomplete="off">
         <div id="calendarCompetitionSuggestions" class="global-search-results"></div>
       </div>
       <div id="convoc-form-detail" style="display:none;">
       <div id="calendarCompetitionNote"></div>
-      <div class="row">
+      <div class="row" style="margin-top:10px;">
         <div style="flex:1">
           <label class="small">Événement</label>
           <select id="convocEventSel"></select>
@@ -488,26 +489,34 @@
       <div class="row">
         <input type="date" id="convocDate">
       </div>
+
+      <div class="category-divider">📍 Lieu</div>
       <div class="row">
         <input type="text" id="convocLieu" placeholder="Adresse de la manifestation">
         <input type="text" id="convocVille" placeholder="Ville">
       </div>
-      <div style="margin-top:12px;">
-        <label class="small">Horaires par catégorie</label>
-        <div id="convoc-schedule"></div>
-        <button class="ghost icon-btn" id="addScheduleRowBtn" style="width:100%; margin-top:8px;">Ajouter une ligne</button>
-      </div>
-      <div class="row" style="margin-top:12px;">
-        <textarea id="convocConsignes" style="width:100%; min-height:70px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:11px 12px; color:var(--ink); font-family:'Inter',sans-serif; font-size:15px; resize:vertical;">NE PAS OUBLIER : Le PASSEPORT SPORTIF en règle OBLIGATOIRE avec au moins 2 timbres de licences (dont saison en cours) pour les benjamins et minimes.</textarea>
-      </div>
-      <div class="row">
-        <div style="flex:1">
-          <label class="small">Réponse à remettre au secrétariat avant le</label>
-          <input type="date" id="convocReplyDeadline">
+
+      <div class="category-divider">🕐 Horaires par catégorie</div>
+      <div id="convoc-schedule"></div>
+      <button class="ghost icon-btn" id="addScheduleRowBtn" style="width:100%; margin-top:8px;">Ajouter une ligne</button>
+
+      <button class="ghost icon-btn" id="convocMoreOptionsBtn" style="width:100%; margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+        <span>Plus d'options (consignes, date limite de réponse)</span>
+        <span id="convocMoreOptionsIcon">▾</span>
+      </button>
+      <div id="convoc-more-options" style="display:none; margin-top:10px;">
+        <div class="row">
+          <textarea id="convocConsignes" style="width:100%; min-height:70px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:11px 12px; color:var(--ink); font-family:'Inter',sans-serif; font-size:15px; resize:vertical;">NE PAS OUBLIER : Le PASSEPORT SPORTIF en règle OBLIGATOIRE avec au moins 2 timbres de licences (dont saison en cours) pour les benjamins et minimes.</textarea>
+        </div>
+        <div class="row">
+          <div style="flex:1">
+            <label class="small">Réponse à remettre au secrétariat avant le</label>
+            <input type="date" id="convocReplyDeadline">
+          </div>
         </div>
       </div>
-      
-      <button class="ghost icon-btn" id="resetConvocBtn" style="width:100%; margin-top:10px; color:var(--clay);">Réinitialiser ce formulaire</button>
+
+      <button class="ghost icon-btn" id="resetConvocBtn" style="width:100%; margin-top:14px; color:var(--clay);">Réinitialiser ce formulaire</button>
       </div>
     </div>
     <div class="card" id="convoc-members"></div>
