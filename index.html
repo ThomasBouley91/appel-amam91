@@ -3058,60 +3058,55 @@ function applyConvocSectionsVisibility(){
   if(newBody) newBody.style.display = newHidden ? 'none' : 'block';
   if(newBtn) newBtn.textContent = newHidden ? '👁️ Afficher' : '🙈 Masquer';
 }
+function pickCalendarCompetition(idx){
+  const c = COMPETITION_CALENDAR[idx];
+  if(!c) return;
+  const fullEventName = effectiveCompetitionName(c);
+  document.getElementById('convocEvent').value = fullEventName;
+  if(c.date) document.getElementById('convocDate').value = c.date;
+  document.getElementById('convocVille').value = effectiveCompetitionCity(c);
+  document.getElementById('convocLieu').value = effectiveCompetitionAddress(c);
+  const fullText = c.name + ' ' + c.details.join(' ');
+  const bandLabel = matchConfiguredBandLabel(fullText);
+  const categorieValue = bandLabel ? bandYearRangeLabel(bandLabel) : '';
+  const cats = bandLabel ? weightOptionsForBandLabel(bandLabel) : null;
+  c.weighIn.forEach(line=>{
+    const times = extractAllTimesFromLine(line);
+    if(times.length>=2){
+      const segments = parseWeighInSegments(line);
+      let weights = [];
+      segments.forEach(seg=>{ weights = weights.concat(weightsForSegment(seg, cats)); });
+      ui.convocSchedule.push({ heureDebut: times[0], heureFin: times[1], categorie: categorieValue, weights });
+    }
+  });
+  saveConvocDraft();
+  renderConvocSchedule();
+  const noteWrap = document.getElementById('calendarCompetitionNote');
+  noteWrap.innerHTML = `<div style="background:#F1F4EA; border-radius:8px; padding:10px 12px; margin-top:8px; font-size:12.5px; line-height:1.5;">
+    📋 <strong>Infos du calendrier</strong> — ${c.dayLabel}${c.level?' · Niveau : '+escapeHtml(c.level):''}${c.details.length?'<br>Catégories concernées : '+escapeHtml(c.details.join(', ')):''}${c.weighIn.length?'<br>Pesées : '+escapeHtml(c.weighIn.join(' — ')):''}${bandLabel?'<br><strong>Catégorie et poids pré-remplis :</strong> '+escapeHtml(categorieValue):'<br><em>Catégorie non détectée automatiquement — choisis-la manuellement sur chaque ligne.</em>'}
+  </div>`;
+  saveNewConvocFormHidden(false);
+  applyConvocSectionsVisibility();
+  showToast(`« ${fullEventName} » — infos pré-remplies`);
+}
 function initCalendarCompetitionPicker(){
-  const input = document.getElementById('calendarCompetitionInput');
-  const wrap = document.getElementById('calendarCompetitionSuggestions');
-  if(!input || !wrap) return;
-  input.addEventListener('input', ()=>{
-    const q = input.value.trim().toLowerCase();
+  const select = document.getElementById('calendarCompetitionSelect');
+  if(select){
     const withinMonth = competitionsWithinNextMonth();
-    const matches = q
-      ? withinMonth.filter(c=> effectiveCompetitionName(c).toLowerCase().includes(q) || effectiveCompetitionCity(c).toLowerCase().includes(q))
-      : withinMonth;
-    renderCalendarCompetitionSuggestions(matches.slice(0,15), wrap);
-  });
-  input.addEventListener('focus', ()=>{
-    if(input.value.trim()) return; // laisse le gestionnaire 'input' gerer une recherche en cours
-    renderCalendarCompetitionSuggestions(competitionsWithinNextMonth().slice(0,15), wrap);
-  });
-  wrap.addEventListener('click', e=>{
-    const row = e.target.closest('[data-action="pick-calendar-competition"]');
-    if(!row) return;
-    const c = COMPETITION_CALENDAR[parseInt(row.dataset.idx,10)];
-    if(!c) return;
-    const fullEventName = effectiveCompetitionName(c);
-    document.getElementById('convocEvent').value = fullEventName;
-    if(c.date) document.getElementById('convocDate').value = c.date;
-    document.getElementById('convocVille').value = effectiveCompetitionCity(c);
-    document.getElementById('convocLieu').value = effectiveCompetitionAddress(c);
-    const fullText = c.name + ' ' + c.details.join(' ');
-    const bandLabel = matchConfiguredBandLabel(fullText);
-    const categorieValue = bandLabel ? bandYearRangeLabel(bandLabel) : '';
-    const cats = bandLabel ? weightOptionsForBandLabel(bandLabel) : null;
-    c.weighIn.forEach(line=>{
-      const times = extractAllTimesFromLine(line);
-      if(times.length>=2){
-        const segments = parseWeighInSegments(line);
-        let weights = [];
-        segments.forEach(seg=>{ weights = weights.concat(weightsForSegment(seg, cats)); });
-        ui.convocSchedule.push({ heureDebut: times[0], heureFin: times[1], categorie: categorieValue, weights });
-      }
+    select.innerHTML = `<option value="">— Choisir une compétition —</option>` + withinMonth.map(c=>{
+      const idx = COMPETITION_CALENDAR.indexOf(c);
+      const already = hasConvocationForCompetition(c) ? '✓ ' : '';
+      const dateLabel = c.date ? fmtDate(c.date) : c.dayLabel;
+      const levelPart = c.level ? ` (${c.level})` : '';
+      const label = `${already}${effectiveCompetitionName(c)}${levelPart} — ${dateLabel} · ${effectiveCompetitionCity(c)}`;
+      return `<option value="${idx}">${escapeHtml(label)}</option>`;
+    }).join('');
+    select.addEventListener('change', ()=>{
+      if(!select.value) return;
+      pickCalendarCompetition(parseInt(select.value,10));
+      select.value = '';
     });
-    saveConvocDraft();
-    renderConvocSchedule();
-    const noteWrap = document.getElementById('calendarCompetitionNote');
-    noteWrap.innerHTML = `<div style="background:#F1F4EA; border-radius:8px; padding:10px 12px; margin-top:8px; font-size:12.5px; line-height:1.5;">
-      📋 <strong>Infos du calendrier</strong> — ${c.dayLabel}${c.level?' · Niveau : '+escapeHtml(c.level):''}${c.details.length?'<br>Catégories concernées : '+escapeHtml(c.details.join(', ')):''}${c.weighIn.length?'<br>Pesées : '+escapeHtml(c.weighIn.join(' — ')):''}${bandLabel?'<br><strong>Catégorie et poids pré-remplis :</strong> '+escapeHtml(categorieValue):'<br><em>Catégorie non détectée automatiquement — choisis-la manuellement sur chaque ligne.</em>'}
-    </div>`;
-    input.value = '';
-    wrap.innerHTML = '';
-    wrap.classList.remove('show');
-    document.getElementById('convoc-form-detail').style.display = 'block';
-    showToast(`« ${fullEventName} » — infos pré-remplies`);
-  });
-  document.addEventListener('click', e=>{
-    if(!input.contains(e.target) && !wrap.contains(e.target)) wrap.classList.remove('show');
-  });
+  }
   const moreOptionsBtn = document.getElementById('convocMoreOptionsBtn');
   if(moreOptionsBtn){
     moreOptionsBtn.addEventListener('click', ()=>{
