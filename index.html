@@ -466,24 +466,32 @@
   <section id="tab-convoc">
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">Convoquer</h2>
-        <button class="ghost icon-btn" id="addManualConvocBtn" title="Ajouter une compétition à la main" style="flex-shrink:0; padding:8px 9px; font-size:16px; font-weight:800;">+</button>
+        <h2 style="margin:0;">Compétition déjà existante</h2>
+        <button class="ghost icon-btn" id="toggleExistingCompetitionBtn" style="flex-shrink:0; padding:8px 9px; font-size:13px;">🙈 Masquer</button>
       </div>
-      <div class="category-divider" style="margin-top:10px;">📅 Compétition</div>
-      <div style="position:relative;">
-        <label class="small">Choisir une compétition à venir (dans le mois, optionnel)</label>
-        <input type="text" id="calendarCompetitionInput" placeholder="Clique ou tape un nom / une ville..." autocomplete="off">
-        <div id="calendarCompetitionSuggestions" class="global-search-results"></div>
-      </div>
-      <div id="convoc-form-detail" style="display:none;">
-      <div id="calendarCompetitionNote"></div>
-      <div class="row" style="margin-top:10px;">
-        <div style="flex:1">
-          <label class="small">Événement</label>
-          <select id="convocEventSel"></select>
+      <div id="existing-competition-body">
+        <div style="position:relative; margin-top:10px;">
+          <label class="small">Compétitions du calendrier (dans le mois à venir)</label>
+          <input type="text" id="calendarCompetitionInput" placeholder="Clique ou tape un nom / une ville..." autocomplete="off">
+          <div id="calendarCompetitionSuggestions" class="global-search-results"></div>
+        </div>
+        <div id="calendarCompetitionNote"></div>
+        <div class="row" style="margin-top:14px;">
+          <div style="flex:1">
+            <label class="small">Convocations déjà créées</label>
+            <select id="convocEventSel"></select>
+          </div>
         </div>
       </div>
-      <div class="row">
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Créer une nouvelle convocation</h2>
+        <button class="ghost icon-btn" id="toggleNewConvocFormBtn" style="flex-shrink:0; padding:8px 9px; font-size:13px;">🙈 Masquer</button>
+      </div>
+      <div id="convoc-form-detail">
+      <div class="row" style="margin-top:10px;">
         <input type="text" id="convocEvent" placeholder="Nom de la manifestation">
       </div>
       <div class="row">
@@ -519,6 +527,7 @@
       <button class="ghost icon-btn" id="resetConvocBtn" style="width:100%; margin-top:14px; color:var(--clay);">Réinitialiser ce formulaire</button>
       </div>
     </div>
+
     <div class="card" id="convoc-members"></div>
     <div class="card" id="convoc-actions"></div>
     <div class="card" id="convoc-current"></div>
