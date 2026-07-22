@@ -4658,12 +4658,12 @@ async function generateEventResultsPdf(){
     const logoImg = document.querySelector('header.topbar .club-logo-light');
     const logoSrc = logoImg ? logoImg.src : '';
 
-    const buildContextHtml = (isFirst)=> !isFirst ? '' : `
+ const buildContextHtml = (isFirst)=> !isFirst ? '' : `
       <div class="recap-header">
         ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
         <div>
           <div class="rh-club">${escapeHtml(data.clubName||'')}</div>
-          <div class="rh-sub">Résultats — ${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</div>
+          <div class="rh-sub">Résultats — ${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}${ev.ville?' — '+escapeHtml(ev.ville):''}</div>
           <div class="rh-sub" style="margin-top:2px;">Catégories : ${categoryLabels.map(c=>escapeHtml(bandYearRangeLabel(c))).join(', ')}</div>
         </div>
       </div>
