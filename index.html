@@ -5729,12 +5729,29 @@ footer.className = 'settings-foot';
 footer.innerHTML = `<button id="resetBtn">Réinitialiser toutes les données</button>`;
 document.getElementById('tab-param').appendChild(footer);
 footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
-  if(!confirm('Ceci efface tous les cours, pratiquants et séances. Continuer ?')) return;
-  data = { clubName: data.clubName, groups:[], members:[], sessions:[], attendance:{} };
+  if(!confirm('Ceci efface DÉFINITIVEMENT tous les cours, pratiquants, séances, convocations, résultats, stages et archives de saison. Les catégories d\'âge, réglages et coordonnées du club sont conservés. Continuer ?')) return;
+  data = {
+    clubName: data.clubName,
+    clubContact: data.clubContact,
+    groups: [],
+    members: [],
+    sessions: [],
+    attendance: {},
+    convocEvents: [],
+    stages: [],
+    archivedSeasons: [],
+    settings: {
+      ageBands: data.settings.ageBands,
+      seasonStartYear: data.settings.seasonStartYear,
+      theme: data.settings.theme,
+      deletedCalendarCompetitions: [],
+      competitionOverrides: {}
+    }
+  };
   await saveData();
-  ui = { activeTab:'presences', presenceGroup:null, presenceSessionId:null };
+  ui = { activeTab:'presences', presenceGroup:null, presenceSessionId:null, groupsMemberDraft:{}, convocCategory:'all', convocChecked:{}, groupsExpanded:{}, suiviExpanded:{}, convocSchedule:[], convocHistoryExpanded:{}, convocMembersExpanded:false, resultsEventId:null, resultsSelectedMemberId:null, recapCategoriesFilter:{}, scheduleWeightExpanded:{}, convocArchiveEventId:null, memberFicheExpanded:{}, memberFicheEditing:{}, suiviSort:'name', birthdaysCourseFilter:{}, birthdaysFilterExpanded:false };
   renderAll();
-  showToast('Données réinitialisées');
+  showToast('Toutes les données ont été réinitialisées');
 });
 /* ---------------- RECHERCHE GLOBALE ---------------- */
 function initCoursSearch(){
