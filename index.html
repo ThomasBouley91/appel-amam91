@@ -3211,6 +3211,82 @@ function eventHasMissingResults(ev){
   if(new Date() < oneDayAfter) return false;
   return ev.recipients.some(r=> r.response==='present' && !r.result);
 }
+  function allResultsFilledForEvent(ev){
+  const presents = (ev.recipients||[]).filter(r=>r.response==='present');
+  if(presents.length===0) return false;
+  return presents.every(r=> !!(r.result && String(r.result).trim()));
+}
+function updateArchiveResultsButton(){
+  const archiveBtn = document.getElementById('archiveResultsEventBtn');
+  if(!archiveBtn) return;
+  const ev = ui.resultsEventId ? data.convocEvents.find(e=>e.id===ui.resultsEventId) : null;
+  if(!ev){ archiveBtn.style.display = 'none'; return; }
+  const filled = allResultsFilledForEvent(ev);
+  archiveBtn.style.display = '';
+  archiveBtn.disabled = !filled;
+  archiveBtn.title = filled ? '' : 'Renseigne le résultat de tous les présents avant de pouvoir archiver cette compétition';
+  archiveBtn.onclick = ()=>{
+    if(!filled){ showToast('Renseigne le résultat de tous les présents avant d’archiver'); return; }
+    if(!confirm(`Archiver « ${ev.name} » ? Elle disparaîtra de la liste déroulante mais restera consultable dans l'historique ci-dessous.`)) return;
+    ev.resultsArchived = true;
+    saveData();
+    ui.resultsEventId = null;
+    renderResultsTab();
+    showToast('Compétition archivée');
+  };
+}
+function renderArchivedEventResultsHtml(ev){
+  const birthDateOf = r => { const m = data.members.find(x=>x.id===r.memberId); return m ? m.birthDate : null; };
+  const presents = ev.recipients.filter(r=>r.response==='present');
+  if(presents.length===0) return '<div class="empty">Aucun participant présent.</div>';
+  const shiai = isShiaiEvent(ev.name);
+  const { rows } = buildResultRowsHtml(presents, birthDateOf, shiai);
+  return `<table class="recap-table" style="margin-top:8px;"><tr><th>Élève</th><th>Catégorie</th><th>Poids</th><th>Résultat</th></tr>${rows.map(r=>`<tr>${r.html}</tr>`).join('')}</table>`;
+}
+function renderResultsHistoryCard(){
+  const wrap = document.getElementById('results-history-card');
+  if(!wrap) return;
+  const archived = (data.convocEvents||[]).filter(ev=>ev.resultsArchived).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  if(!ui.resultsHistoryExpanded) ui.resultsHistoryExpanded = {};
+  wrap.innerHTML = `
+    <h2>Historique des compétitions</h2>
+    ${archived.length===0 ? '<div class="empty">Aucune compétition archivée pour l’instant.</div>' : archived.map(ev=>{
+      const expanded = !!ui.resultsHistoryExpanded[ev.id];
+      const presents = ev.recipients.filter(r=>r.response==='present');
+      return `
+      <div class="group-block" style="margin-top:10px;">
+        <div class="group-title-row" data-action="toggle-results-history" data-id="${ev.id}" style="cursor:pointer;">
+          <div>
+            <div class="name">${escapeHtml(ev.name)}</div>
+            <div class="meta">${ev.date?fmtDate(ev.date):''}${ev.ville?' — '+escapeHtml(ev.ville):''} · ${presents.length} participant${presents.length===1?'':'s'}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="ghost icon-btn" data-action="unarchive-results-event" data-id="${ev.id}" style="font-size:12px;">Désarchiver</button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="flex-shrink:0; color:var(--ink-dim); transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+        ${expanded ? renderArchivedEventResultsHtml(ev) : ''}
+      </div>`;
+    }).join('')}
+  `;
+  wrap.querySelectorAll('[data-action="toggle-results-history"]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      ui.resultsHistoryExpanded[el.dataset.id] = !ui.resultsHistoryExpanded[el.dataset.id];
+      renderResultsHistoryCard();
+    });
+  });
+  wrap.querySelectorAll('[data-action="unarchive-results-event"]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      e.stopPropagation();
+      const ev = data.convocEvents.find(x=>x.id===btn.dataset.id);
+      if(!ev) return;
+      ev.resultsArchived = false;
+      saveData();
+      renderResultsTab();
+      showToast(`« ${ev.name} » remise dans la liste des événements`);
+    });
+  });
+}
 function renderResultsTab(){
   const sel = document.getElementById('resultsEventSel');
   if(!sel) return;
