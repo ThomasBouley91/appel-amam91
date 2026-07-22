@@ -1043,7 +1043,13 @@ document.getElementById('themeToggle').addEventListener('click', ()=>{
   document.getElementById('themeToggle').textContent = next==='light' ? '🌙' : '☀️';
   saveData();
 });
-
+function renderHeaderSeasonLabel(){
+  const el = document.getElementById('headerSeasonLabel');
+  if(!el) return;
+  const seasonYear = data.settings.seasonStartYear || autoSeasonStartYear();
+  el.textContent = `Saison ${schoolYearLabel(seasonYear)}`;
+}
+function renderAll(){
 function renderAll(){
   if(!ready) return;
   renderHeaderSeasonLabel();
