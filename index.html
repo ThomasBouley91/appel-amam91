@@ -3886,14 +3886,13 @@ async function generateMemberPalmaresPdf(){
   (data.convocEvents||[]).forEach(ev=>{
     const r = ev.recipients.find(x=>x.memberId===m.id);
     if(r && r.response==='present' && r.result){
-      rows.push({ eventName: ev.name, date: ev.date, result: r.result, shiai: isShiaiEvent(ev.name), qualificationFor: r.qualificationFor||'' });
+      rows.push({ eventName: ev.name, date: ev.date, ville: ev.ville||'', result: r.result, shiai: isShiaiEvent(ev.name), qualificationFor: r.qualificationFor||'' });
     }
   });
   rows.sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   const stages = memberStages(m.id);
   const beltHistory = [...(m.beltHistory||[])].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   if(rows.length===0 && stages.length===0 && beltHistory.length===0){ showToast('Aucun résultat, stage ou passage de grade enregistré pour cet élève'); return; }
-
   try{
     const logoImg = document.querySelector('header.topbar .club-logo-light');
     const logoSrc = logoImg ? logoImg.src : '';
