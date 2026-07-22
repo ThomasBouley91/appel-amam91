@@ -3243,44 +3243,68 @@ function renderArchivedEventResultsHtml(ev){
   const { rows } = buildResultRowsHtml(presents, birthDateOf, shiai);
   return `<table class="recap-table" style="margin-top:8px;"><tr><th>Élève</th><th>Catégorie</th><th>Poids</th><th>Résultat</th></tr>${rows.map(r=>`<tr>${r.html}</tr>`).join('')}</table>`;
 }
+function loadResultsHistoryHidden(){
+  try{ return localStorage.getItem('dojo-results-history-hidden')==='1'; }catch(e){ return false; }
+}
+function saveResultsHistoryHidden(val){
+  try{ localStorage.setItem('dojo-results-history-hidden', val?'1':'0'); }catch(e){}
+}
 function renderResultsHistoryCard(){
   const wrap = document.getElementById('results-history-card');
   if(!wrap) return;
   const archived = (data.convocEvents||[]).filter(ev=>ev.resultsArchived).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
-  if(!ui.resultsHistoryExpanded) ui.resultsHistoryExpanded = {};
+  const hidden = loadResultsHistoryHidden();
+  const selectedId = ui.resultsHistorySelectedId && archived.some(ev=>ev.id===ui.resultsHistorySelectedId) ? ui.resultsHistorySelectedId : '';
+  ui.resultsHistorySelectedId = selectedId;
+  const selectedEv = selectedId ? archived.find(ev=>ev.id===selectedId) : null;
+
   wrap.innerHTML = `
-    <h2>Historique des compétitions</h2>
-    ${archived.length===0 ? '<div class="empty">Aucune compétition archivée pour l’instant.</div>' : archived.map(ev=>{
-      const expanded = !!ui.resultsHistoryExpanded[ev.id];
-      const presents = ev.recipients.filter(r=>r.response==='present');
-      return `
-      <div class="group-block" style="margin-top:10px;">
-        <div class="group-title-row" data-action="toggle-results-history" data-id="${ev.id}" style="cursor:pointer;">
-          <div>
-            <div class="name">${escapeHtml(ev.name)}</div>
-            <div class="meta">${ev.date?fmtDate(ev.date):''}${ev.ville?' — '+escapeHtml(ev.ville):''} · ${presents.length} participant${presents.length===1?'':'s'}</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:6px;">
-            <button class="ghost icon-btn" data-action="unarchive-results-event" data-id="${ev.id}" style="font-size:12px;">Désarchiver</button>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="flex-shrink:0; color:var(--ink-dim); transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
-          </div>
-        </div>
-        ${expanded ? renderArchivedEventResultsHtml(ev) : ''}
-      </div>`;
-    }).join('')}
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Historique des compétitions</h2>
+      <button class="ghost icon-btn" id="toggleResultsHistoryBtn" title="${hidden?'Afficher':'Masquer'}" style="flex-shrink:0; padding:8px 9px; font-size:13px;">${hidden?'👁️ Afficher':'🙈 Masquer'}</button>
+    </div>
+    ${hidden ? '' : `
+    ${archived.length===0 ? '<div class="empty" style="margin-top:10px;">Aucune compétition archivée pour l’instant.</div>' : `
+    <div class="row" style="margin-top:10px;">
+      <select id="resultsHistorySel" style="flex:1;">
+        <option value="">— Choisir une compétition archivée —</option>
+        ${archived.map(ev=>`<option value="${ev.id}" ${ev.id===selectedId?'selected':''}>${escapeHtml(ev.name)}${ev.date?' — '+fmtDate(ev.date):''}</option>`).join('')}
+      </select>
+    </div>
+    <div id="results-history-detail" style="margin-top:10px;">
+      ${selectedEv ? renderResultsHistoryDetail(selectedEv) : ''}
+    </div>`}
+    `}
   `;
-  wrap.querySelectorAll('[data-action="toggle-results-history"]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      ui.resultsHistoryExpanded[el.dataset.id] = !ui.resultsHistoryExpanded[el.dataset.id];
+  const toggleBtn = document.getElementById('toggleResultsHistoryBtn');
+  if(toggleBtn) toggleBtn.addEventListener('click', ()=>{ saveResultsHistoryHidden(!hidden); renderResultsHistoryCard(); });
+  const sel = document.getElementById('resultsHistorySel');
+  if(sel){
+    sel.addEventListener('change', ()=>{
+      ui.resultsHistorySelectedId = sel.value;
       renderResultsHistoryCard();
     });
-  });
+  }
+  attachResultsHistoryDetailHandlers();
+}
+function renderResultsHistoryDetail(ev){
+  const presents = ev.recipients.filter(r=>r.response==='present');
+  return `
+    <div class="meta" style="margin-bottom:8px;">${ev.date?fmtDate(ev.date):''}${ev.ville?' — '+escapeHtml(ev.ville):''} · ${presents.length} participant${presents.length===1?'':'s'}</div>
+    <button class="ghost icon-btn" data-action="unarchive-results-event" data-id="${ev.id}" style="width:100%; margin-bottom:10px; font-size:12.5px;">Désarchiver — remettre dans la liste de travail</button>
+    ${renderArchivedEventResultsHtml(ev)}
+  `;
+}
+function attachResultsHistoryDetailHandlers(){
+  const wrap = document.getElementById('results-history-card');
+  if(!wrap) return;
   wrap.querySelectorAll('[data-action="unarchive-results-event"]').forEach(btn=>{
     btn.addEventListener('click', e=>{
       e.stopPropagation();
       const ev = data.convocEvents.find(x=>x.id===btn.dataset.id);
       if(!ev) return;
       ev.resultsArchived = false;
+      ui.resultsHistorySelectedId = null;
       saveData();
       renderResultsTab();
       showToast(`« ${ev.name} » remise dans la liste des événements`);
