@@ -1608,6 +1608,32 @@ function renderCalendarAddForm(){
     </div>
   </div>`;
 }
+function calendarRowFields(r){
+  if(r.kind==='imported'){
+    const c = r.c;
+    return {
+      name: effectiveCompetitionName(c),
+      city: effectiveCompetitionCity(c),
+      address: effectiveCompetitionAddress(c),
+      ageCategories: importedCompetitionAgeCategories(c)
+    };
+  }
+  const e = r.e;
+  return {
+    name: e.name||'', city: e.city||'', address: e.address||'',
+    ageCategories: e.ageCategories!==undefined ? e.ageCategories : []
+  };
+}
+function calendarRowHasCategory(ageCategories){
+  return ageCategories==='all' || (Array.isArray(ageCategories) && ageCategories.length>0);
+}
+function isCalendarRowIncomplete(r){
+  const f = calendarRowFields(r);
+  const hasName = !!(f.name && f.name.trim());
+  const hasCity = !!(f.city && f.city.trim());
+  const hasAddress = !!(f.address && f.address.trim());
+  return !(hasName && hasCity && hasAddress && calendarRowHasCategory(f.ageCategories));
+}
 function renderImportedCompetitionsSettings(){
   const wrap = document.getElementById('imported-competitions-settings');
   if(!wrap) return;
@@ -1620,22 +1646,64 @@ function renderImportedCompetitionsSettings(){
   const expanded = !!ui.importedCompetitionsExpanded;
   if(!ui.editingCompetitionKey) ui.editingCompetitionKey = null;
   if(ui.addingCalendarEvent===undefined) ui.addingCalendarEvent = false;
+  if(ui.calendarSettingsFilterIncomplete===undefined) ui.calendarSettingsFilterIncomplete = false;
+  if(!ui.calendarSettingsFilterCategory) ui.calendarSettingsFilterCategory = 'all';
+
+  let filteredRows = rows;
+  if(ui.calendarSettingsFilterIncomplete){
+    filteredRows = filteredRows.filter(r=> isCalendarRowIncomplete(r));
+  }
+  if(ui.calendarSettingsFilterCategory !== 'all'){
+    filteredRows = filteredRows.filter(r=>{
+      const f = calendarRowFields(r);
+      if(ui.calendarSettingsFilterCategory === 'none') return !calendarRowHasCategory(f.ageCategories);
+      return calendarEntryAppliesToCategory(f.ageCategories, ui.calendarSettingsFilterCategory);
+    });
+  }
+  const filtersActive = ui.calendarSettingsFilterIncomplete || ui.calendarSettingsFilterCategory !== 'all';
+  const countLabel = filtersActive ? `${filteredRows.length}/${rows.length}` : `${rows.length}`;
+  const categoryOptions = calendarSelectableCategories();
 
   wrap.innerHTML = `
     <button class="ghost icon-btn" id="toggleImportedCompetitions" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
-      <span>Compétitions & stages du calendrier (${rows.length})</span>
+      <span>Compétitions & stages du calendrier (${countLabel})</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
     </button>
     ${expanded ? `
     <p style="font-size:12.5px; color:var(--ink-dim); margin:10px 0;">Supprimer une compétition importée ici la retire définitivement — elle ne réapparaîtra plus. Le crayon permet de corriger le nom, la ville, l'adresse et les catégories d'âge concernées. Tu peux aussi ajouter toi-même une compétition ou un stage absent de la liste importée.</p>
-    <button class="ghost icon-btn" id="toggleAddCalendarEvent" style="width:100%; margin-bottom:10px;">${ui.addingCalendarEvent ? '✕ Annuler l’ajout' : '+ Ajouter une compétition ou un stage'}</button>
+    <div class="row" style="align-items:flex-end;">
+      <div style="flex:1;">
+        <label class="small">Filtrer par catégorie</label>
+        <select id="calendarSettingsCategoryFilter">
+          <option value="all" ${ui.calendarSettingsFilterCategory==='all'?'selected':''}>Toutes les catégories</option>
+          <option value="none" ${ui.calendarSettingsFilterCategory==='none'?'selected':''}>Sans catégorie</option>
+          ${categoryOptions.map(l=>`<option value="${escapeHtml(l)}" ${ui.calendarSettingsFilterCategory===l?'selected':''}>${escapeHtml(l)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:10px 0 4px;">
+      <input type="checkbox" id="calendarSettingsIncompleteFilter" ${ui.calendarSettingsFilterIncomplete?'checked':''}>
+      Compétition incomplète (nom, ville, adresse ou catégorie manquant)
+    </label>
+    <button class="ghost icon-btn" id="toggleAddCalendarEvent" style="width:100%; margin:10px 0;">${ui.addingCalendarEvent ? '✕ Annuler l’ajout' : '+ Ajouter une compétition ou un stage'}</button>
     ${ui.addingCalendarEvent ? renderCalendarAddForm() : ''}
-    ${rows.length===0 ? '<div class="empty">Aucun événement pour l’instant.</div>' : rows.map(r=> r.kind==='imported' ? renderImportedCompetitionRow(r.c) : renderManualEventRow(r.e)).join('')}
+    ${filteredRows.length===0 ? '<div class="empty">Aucun événement à afficher pour cette sélection.</div>' : filteredRows.map(r=> r.kind==='imported' ? renderImportedCompetitionRow(r.c) : renderManualEventRow(r.e)).join('')}
     ` : ''}
   `;
 
   document.getElementById('toggleImportedCompetitions').addEventListener('click', ()=>{
     ui.importedCompetitionsExpanded = !ui.importedCompetitionsExpanded;
+    renderImportedCompetitionsSettings();
+  });
+
+  const catFilterSelect = document.getElementById('calendarSettingsCategoryFilter');
+  if(catFilterSelect) catFilterSelect.addEventListener('change', ()=>{
+    ui.calendarSettingsFilterCategory = catFilterSelect.value;
+    renderImportedCompetitionsSettings();
+  });
+  const incompleteFilterCheck = document.getElementById('calendarSettingsIncompleteFilter');
+  if(incompleteFilterCheck) incompleteFilterCheck.addEventListener('change', ()=>{
+    ui.calendarSettingsFilterIncomplete = incompleteFilterCheck.checked;
     renderImportedCompetitionsSettings();
   });
 
