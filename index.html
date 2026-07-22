@@ -284,6 +284,25 @@
   .recap-table td{ padding:9px 10px; border-bottom:1px solid #eee; }
   .recap-table tr:nth-child(even) td{ background:#FAFAF7; }
 
+  /* Calendrier PDF — grille par mois (paysage) */
+  .pdfcal-grid{ display:flex; gap:10px; align-items:flex-start; margin-top:6px; }
+  .pdfcal-col{ flex:1; min-width:0; }
+  .pdfcal-col-head{
+    font-family:'Rajdhani',sans-serif; font-weight:800; font-size:12.5px; text-transform:uppercase;
+    letter-spacing:0.04em; text-align:center; color:#fff; background:#2A2F26;
+    padding:7px 4px; border-radius:6px 6px 0 0;
+  }
+  .pdfcal-col-body{ border:1px solid #eee; border-top:none; border-radius:0 0 6px 6px; padding:6px; min-height:40px; background:#FCFCFA; }
+  .pdfcal-col-empty{ font-size:10px; color:#bbb; text-align:center; padding:12px 4px; }
+  .pdfcal-event{ border-left:3px solid #6F8248; background:#F1F4EA; border-radius:4px; padding:5px 6px; margin-bottom:6px; }
+  .pdfcal-event:last-child{ margin-bottom:0; }
+  .pdfcal-event.type-stage{ border-left-color:#B3492F; background:#FDF3E7; }
+  .pdfcal-event .pce-day{ font-family:'Rajdhani',sans-serif; font-weight:800; font-size:10.5px; color:#43592B; }
+  .pdfcal-event.type-stage .pce-day{ color:#B3492F; }
+  .pdfcal-event .pce-name{ font-size:9.5px; font-weight:700; line-height:1.25; margin-top:1px; color:#1A1A1A; }
+  .pdfcal-event .pce-city{ font-size:8.5px; color:#888; margin-top:1px; }
+  .pdfcal-event .pce-cat{ font-size:7.5px; color:#999; margin-top:2px; font-style:italic; }
+
   .slot-row{ display:flex; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
   .slot-row:last-child{ border-bottom:none; }
   .slot-row select{ flex:1.6; padding:9px 8px; font-size:13.5px; }
@@ -297,6 +316,32 @@
   .cert-card .name{ font-size:26px; margin:16px 0 8px; }
   .cert-card .stat{ font-size:15px; margin:6px 0 18px; color:var(--ink); font-family:'Inter',sans-serif; font-weight:600; text-transform:none; }
   .cert-card .stamp{ font-size:11px; color:var(--ink-dim); margin-top:20px; }
+
+  .cal-month-head{
+    font-family:'Big Shoulders Display', system-ui, sans-serif; font-weight:800; font-size:14px;
+    text-transform:uppercase; letter-spacing:0.05em; color:var(--tatami);
+    padding:12px 4px 6px; margin-top:4px; border-bottom:1px solid var(--line);
+  }
+  .cal-month-head:first-child{ margin-top:0; }
+  .cal-section-divider{
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--ink-dim); background:var(--surface-2); padding:8px 10px; border-radius:6px;
+    margin:16px 0 6px;
+  }
+  .cal-event{ display:flex; align-items:center; gap:12px; padding:10px 2px; border-bottom:1px solid var(--line); }
+  .cal-event:last-child{ border-bottom:none; }
+  .cal-event .cal-daybox{
+    flex-shrink:0; width:46px; height:46px; border-radius:11px; background:var(--tatami-dim);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.05;
+  }
+  .cal-event.type-stage .cal-daybox{ background:var(--clay-dim); }
+  .cal-event .cal-daybox .d{ font-family:'Big Shoulders Display'; font-size:17px; font-weight:800; color:var(--tatami); }
+  .cal-event.type-stage .cal-daybox .d{ color:var(--clay); }
+  .cal-event .cal-daybox .m{ font-size:9px; text-transform:uppercase; letter-spacing:0.03em; color:var(--ink-dim); }
+  .cal-event .cal-info{ flex:1; min-width:0; }
+  .cal-event .cal-info .n{ font-size:14px; font-weight:600; }
+  .cal-event .cal-info .e{ font-size:12px; color:var(--ink-dim); margin-top:1px; }
+  .cal-event .cal-info .cats{ margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
 
   .convoc-row{ display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--line); }
   .convoc-row:last-child{ border-bottom:none; }
@@ -461,6 +506,7 @@
       </div>
     </div>
     <div id="suivi-content"></div>
+    <div id="competitions-calendar"></div>
   </section>
 
   <section id="tab-convoc">
@@ -602,7 +648,8 @@
       <div id="results-dashboard"></div>
       <div id="recap-category-filter" style="margin-top:14px;"></div>
       <button class="primary" id="generateRecapPdfBtn" style="width:100%; margin-top:10px;">📄 Générer le récap PDF du mois</button>
-<button class="ghost" id="generateAnnualRecapBtn" style="width:100%; margin-top:8px;">📄 Générer le récap PDF de la saison (sept.–août)</button>    </div>
+<button class="ghost" id="generateAnnualRecapBtn" style="width:100%; margin-top:8px;">📄 Générer le récap PDF de la saison (sept.–août)</button>
+<button class="ghost" id="generateAGReportBtn" style="width:100%; margin-top:8px;">📋 Générer le rapport annuel (Assemblée générale)</button>    </div>
   </section>
 
   <section id="tab-param">
@@ -791,7 +838,9 @@ function ensureSettings(){
   if(!data.convocEvents) data.convocEvents = [];
   if(!data.stages) data.stages = [];
   if(!data.archivedSeasons) data.archivedSeasons = [];
+  if(!data.calendarEvents) data.calendarEvents = [];
   if(!data.settings.deletedCalendarCompetitions) data.settings.deletedCalendarCompetitions = [];
+  if(!data.settings.competitionOverrides) data.settings.competitionOverrides = {};
   data.convocEvents.forEach(ev=>{ if(ev.archived===undefined) ev.archived = false; });
   data.groups.forEach(g=>{ g.recurrence ||= []; });
 }
@@ -1076,6 +1125,7 @@ function renderAll(){
   renderPresencesTab();
   renderSuiviTab();
   renderSuiviAlerts();
+  renderCompetitionsCalendarCard();
   renderExportCard();
   renderConvocTab();
   renderResultsTab();
@@ -1414,61 +1464,218 @@ function renderAgeSettings(){
 }
 
 /* ---------------- AJOUTER UN PRATIQUANT (n'importe quel cours) ---------------- */
+function validatedBadgeHtml(validated){
+  return validated ? ' <span title="Validé" style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border-radius:50%; background:#3F8F3F; color:#fff; font-size:10px; font-weight:800; vertical-align:middle;">✓</span>' : '';
+}
+function renderImportedCompetitionRow(c){
+  const key = competitionKey(c);
+  const editing = ui.editingCompetitionKey === key;
+  const validated = getCompetitionOverride(c).validated === true;
+  if(editing){
+    return `
+    <div class="convoc-row" style="flex-direction:column; align-items:stretch; gap:8px;" data-form="imported-edit">
+      <div>
+        <span class="field-label">Nom de l'événement</span>
+        <input type="text" data-field="name" value="${escapeHtml(effectiveCompetitionName(c))}">
+      </div>
+      <div>
+        <span class="field-label">Ville</span>
+        <input type="text" data-field="city" value="${escapeHtml(effectiveCompetitionCity(c))}">
+      </div>
+      <div>
+        <span class="field-label">Adresse de la manifestation</span>
+        <input type="text" data-field="address" value="${escapeHtml(effectiveCompetitionAddress(c))}" placeholder="Ex. Dojo David Larose - 9 rue Albert Camus">
+      </div>
+      ${ageCategoryCheckboxesHtml(importedCompetitionAgeCategories(c))}
+      <div class="row" style="margin-top:2px;">
+        <button class="primary" data-action="save-competition-edit" data-key="${escapeHtml(key)}" style="flex:1;">✓ Enregistrer</button>
+        <button class="ghost" data-action="cancel-competition-edit" style="flex:1;">Annuler</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="convoc-row" style="align-items:flex-start;">
+    <div class="info">
+      <div class="n">🏆 ${escapeHtml(effectiveCompetitionName(c))}${validatedBadgeHtml(validated)}${c.level?' <span class="tag">'+escapeHtml(c.level)+'</span>':''}</div>
+      <div class="e">${c.date?fmtDate(c.date):escapeHtml(c.dayLabel)} · ${escapeHtml(effectiveCompetitionCity(c))}</div>
+      <div style="margin-top:4px;">${calendarCategoryTagsHtml(importedCompetitionAgeCategories(c))}</div>
+    </div>
+    <div style="display:flex; gap:4px; flex-shrink:0;">
+      <button class="ghost icon-btn" data-action="toggle-validate-imported" data-key="${escapeHtml(key)}" title="${validated?'Retirer la validation':'Valider'}" style="padding:6px 9px; font-size:12px; ${validated?'background:var(--tatami-dim); border-color:var(--tatami); color:var(--tatami);':''}">✓</button>
+      <button class="ghost icon-btn" data-action="edit-imported-competition" data-key="${escapeHtml(key)}" title="Modifier" style="padding:6px 9px; font-size:12px;">✏️</button>
+      <button class="ghost icon-btn" data-action="delete-imported-competition" data-key="${escapeHtml(key)}" title="Supprimer définitivement" style="padding:6px 9px; font-size:12px;">✕</button>
+    </div>
+  </div>`;
+}
+function renderManualEventRow(e){
+  const key = 'manual-'+e.id;
+  const editing = ui.editingCompetitionKey === key;
+  if(editing){
+    return `
+    <div class="convoc-row" style="flex-direction:column; align-items:stretch; gap:8px;" data-form="manual-edit" data-entry-id="${escapeHtml(e.id)}">
+      <div class="row" style="margin:0;">
+        <div style="flex:1;">
+          <span class="field-label">Type</span>
+          <select data-field="type">
+            <option value="competition" ${e.type!=='stage'?'selected':''}>🏆 Compétition</option>
+            <option value="stage" ${e.type==='stage'?'selected':''}>🥋 Stage</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <span class="field-label">Date</span>
+          <input type="date" data-field="date" value="${escapeHtml(e.date||'')}">
+        </div>
+      </div>
+      <div>
+        <span class="field-label">Nom de l'événement</span>
+        <input type="text" data-field="name" value="${escapeHtml(e.name||'')}">
+      </div>
+      <div class="row" style="margin:0;">
+        <div style="flex:1;">
+          <span class="field-label">Ville</span>
+          <input type="text" data-field="city" value="${escapeHtml(e.city||'')}">
+        </div>
+        <div style="flex:1;">
+          <span class="field-label">Niveau (optionnel)</span>
+          <input type="text" data-field="level" value="${escapeHtml(e.level||'')}">
+        </div>
+      </div>
+      <div>
+        <span class="field-label">Adresse (optionnel)</span>
+        <input type="text" data-field="address" value="${escapeHtml(e.address||'')}">
+      </div>
+      ${ageCategoryCheckboxesHtml(e.ageCategories!==undefined?e.ageCategories:[])}
+      <div class="row" style="margin-top:2px;">
+        <button class="primary" data-action="save-manual-edit" style="flex:1;">✓ Enregistrer</button>
+        <button class="ghost" data-action="cancel-manual-edit" style="flex:1;">Annuler</button>
+      </div>
+    </div>`;
+  }
+  const typeBadge = e.type==='stage' ? '🥋' : '🏆';
+  const validated = e.validated === true;
+  return `
+  <div class="convoc-row" style="align-items:flex-start;">
+    <div class="info">
+      <div class="n">${typeBadge} ${escapeHtml(e.name)}${validatedBadgeHtml(validated)}${e.level?' <span class="tag">'+escapeHtml(e.level)+'</span>':''} <span class="tag" style="background:var(--tatami-dim); color:var(--tatami);">Ajouté</span></div>
+      <div class="e">${e.date?fmtDate(e.date):''}${e.city?' · '+escapeHtml(e.city):''}</div>
+      <div style="margin-top:4px;">${calendarCategoryTagsHtml(e.ageCategories!==undefined?e.ageCategories:[])}</div>
+    </div>
+    <div style="display:flex; gap:4px; flex-shrink:0;">
+      <button class="ghost icon-btn" data-action="toggle-validate-manual" data-id="${escapeHtml(e.id)}" title="${validated?'Retirer la validation':'Valider'}" style="padding:6px 9px; font-size:12px; ${validated?'background:var(--tatami-dim); border-color:var(--tatami); color:var(--tatami);':''}">✓</button>
+      <button class="ghost icon-btn" data-action="edit-manual-event" data-id="${escapeHtml(e.id)}" title="Modifier" style="padding:6px 9px; font-size:12px;">✏️</button>
+      <button class="ghost icon-btn" data-action="delete-manual-event" data-id="${escapeHtml(e.id)}" title="Supprimer" style="padding:6px 9px; font-size:12px;">✕</button>
+    </div>
+  </div>`;
+}
+function renderCalendarAddForm(){
+  return `
+  <div class="convoc-row" style="flex-direction:column; align-items:stretch; gap:8px; background:var(--surface-2); border-radius:10px; padding:10px; margin-bottom:10px;" data-form="add-calendar-event">
+    <div class="row" style="margin:0;">
+      <div style="flex:1;">
+        <span class="field-label">Type</span>
+        <select data-field="type">
+          <option value="competition">🏆 Compétition</option>
+          <option value="stage">🥋 Stage</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <span class="field-label">Date</span>
+        <input type="date" data-field="date">
+      </div>
+    </div>
+    <div>
+      <span class="field-label">Nom de l'événement</span>
+      <input type="text" data-field="name" placeholder="Ex. Tournoi de printemps">
+    </div>
+    <div class="row" style="margin:0;">
+      <div style="flex:1;">
+        <span class="field-label">Ville</span>
+        <input type="text" data-field="city">
+      </div>
+      <div style="flex:1;">
+        <span class="field-label">Niveau (optionnel)</span>
+        <input type="text" data-field="level" placeholder="Départemental…">
+      </div>
+    </div>
+    <div>
+      <span class="field-label">Adresse (optionnel)</span>
+      <input type="text" data-field="address">
+    </div>
+    ${ageCategoryCheckboxesHtml([])}
+    <div class="row" style="margin-top:2px;">
+      <button class="primary" data-action="save-add-calendar-event" style="flex:1;">✓ Ajouter au calendrier</button>
+      <button class="ghost" data-action="cancel-add-calendar-event" style="flex:1;">Annuler</button>
+    </div>
+  </div>`;
+}
 function renderImportedCompetitionsSettings(){
   const wrap = document.getElementById('imported-competitions-settings');
   if(!wrap) return;
-  const list = [...visibleCompetitionCalendar()].sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+  const importedList = [...visibleCompetitionCalendar()];
+  const manualList = data.calendarEvents || [];
+  const rows = [
+    ...importedList.map(c=>({ kind:'imported', c, date:c.date||'' })),
+    ...manualList.map(e=>({ kind:'manual', e, date:e.date||'' }))
+  ].sort((a,b)=> a.date.localeCompare(b.date));
   const expanded = !!ui.importedCompetitionsExpanded;
   if(!ui.editingCompetitionKey) ui.editingCompetitionKey = null;
+  if(ui.addingCalendarEvent===undefined) ui.addingCalendarEvent = false;
+
   wrap.innerHTML = `
     <button class="ghost icon-btn" id="toggleImportedCompetitions" style="width:100%; display:flex; justify-content:space-between; align-items:center;">
-      <span>Compétitions importées du calendrier (${list.length})</span>
+      <span>Compétitions & stages du calendrier (${rows.length})</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="transform:rotate(${expanded?90:0}deg); transition:transform .15s;"><path d="M9 6l6 6-6 6"/></svg>
     </button>
     ${expanded ? `
-    <p style="font-size:12.5px; color:var(--ink-dim); margin:10px 0;">Supprimer une compétition ici la retire définitivement — elle ne réapparaîtra plus, y compris dans « Choisir une compétition à venir ». Le crayon permet de corriger le nom, la ville ou l'adresse à l'avance.</p>
-    ${list.length===0 ? '<div class="empty">Toutes les compétitions importées ont été supprimées.</div>' : list.map(c=>{
-      const key = competitionKey(c);
-      const editing = ui.editingCompetitionKey === key;
-      if(editing){
-        return `
-        <div class="convoc-row" style="flex-direction:column; align-items:stretch; gap:8px;">
-          <div>
-            <span class="field-label">Nom de l'événement</span>
-            <input type="text" data-field="name" value="${escapeHtml(effectiveCompetitionName(c))}">
-          </div>
-          <div>
-            <span class="field-label">Ville</span>
-            <input type="text" data-field="city" value="${escapeHtml(effectiveCompetitionCity(c))}">
-          </div>
-          <div>
-            <span class="field-label">Adresse de la manifestation</span>
-            <input type="text" data-field="address" value="${escapeHtml(effectiveCompetitionAddress(c))}" placeholder="Ex. Dojo David Larose - 9 rue Albert Camus">
-          </div>
-          <div class="row" style="margin-top:2px;">
-            <button class="primary" data-action="save-competition-edit" data-key="${escapeHtml(key)}" style="flex:1;">✓ Enregistrer</button>
-            <button class="ghost" data-action="cancel-competition-edit" style="flex:1;">Annuler</button>
-          </div>
-        </div>`;
-      }
-      return `
-      <div class="convoc-row">
-        <div class="info">
-          <div class="n">${escapeHtml(effectiveCompetitionName(c))}${c.level?' <span class="tag">'+escapeHtml(c.level)+'</span>':''}</div>
-          <div class="e">${c.date?fmtDate(c.date):escapeHtml(c.dayLabel)} · ${escapeHtml(effectiveCompetitionCity(c))}</div>
-        </div>
-        <div style="display:flex; gap:4px; flex-shrink:0;">
-          <button class="ghost icon-btn" data-action="edit-imported-competition" data-key="${escapeHtml(key)}" title="Modifier" style="padding:6px 9px; font-size:12px;">✏️</button>
-          <button class="ghost icon-btn" data-action="delete-imported-competition" data-key="${escapeHtml(key)}" title="Supprimer définitivement" style="padding:6px 9px; font-size:12px;">✕</button>
-        </div>
-      </div>`;
-    }).join('')}
+    <p style="font-size:12.5px; color:var(--ink-dim); margin:10px 0;">Supprimer une compétition importée ici la retire définitivement — elle ne réapparaîtra plus. Le crayon permet de corriger le nom, la ville, l'adresse et les catégories d'âge concernées. Tu peux aussi ajouter toi-même une compétition ou un stage absent de la liste importée.</p>
+    <button class="ghost icon-btn" id="toggleAddCalendarEvent" style="width:100%; margin-bottom:10px;">${ui.addingCalendarEvent ? '✕ Annuler l’ajout' : '+ Ajouter une compétition ou un stage'}</button>
+    ${ui.addingCalendarEvent ? renderCalendarAddForm() : ''}
+    ${rows.length===0 ? '<div class="empty">Aucun événement pour l’instant.</div>' : rows.map(r=> r.kind==='imported' ? renderImportedCompetitionRow(r.c) : renderManualEventRow(r.e)).join('')}
     ` : ''}
   `;
+
   document.getElementById('toggleImportedCompetitions').addEventListener('click', ()=>{
     ui.importedCompetitionsExpanded = !ui.importedCompetitionsExpanded;
     renderImportedCompetitionsSettings();
   });
+
+  const toggleAddBtn = document.getElementById('toggleAddCalendarEvent');
+  if(toggleAddBtn) toggleAddBtn.addEventListener('click', ()=>{
+    ui.addingCalendarEvent = !ui.addingCalendarEvent;
+    renderImportedCompetitionsSettings();
+  });
+
+  const addForm = wrap.querySelector('[data-form="add-calendar-event"]');
+  if(addForm){
+    wireAgeCategoryExclusivity(addForm);
+    addForm.querySelector('[data-action="save-add-calendar-event"]').addEventListener('click', ()=>{
+      const name = addForm.querySelector('[data-field="name"]').value.trim();
+      const dateVal = addForm.querySelector('[data-field="date"]').value;
+      if(!name || !dateVal){ showToast('Renseigne au moins le nom et la date'); return; }
+      const entry = {
+        id: uid(),
+        type: addForm.querySelector('[data-field="type"]').value,
+        name,
+        date: dateVal,
+        city: addForm.querySelector('[data-field="city"]').value.trim(),
+        level: addForm.querySelector('[data-field="level"]').value.trim(),
+        address: addForm.querySelector('[data-field="address"]').value.trim(),
+        ageCategories: readAgeCategoriesFromForm(addForm)
+      };
+      if(!data.calendarEvents) data.calendarEvents = [];
+      data.calendarEvents.push(entry);
+      saveData();
+      ui.addingCalendarEvent = false;
+      renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
+      showToast('Événement ajouté au calendrier');
+    });
+    addForm.querySelector('[data-action="cancel-add-calendar-event"]').addEventListener('click', ()=>{
+      ui.addingCalendarEvent = false;
+      renderImportedCompetitionsSettings();
+    });
+  }
+
   wrap.querySelectorAll('[data-action="delete-imported-competition"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(!confirm('Supprimer définitivement cette compétition de la liste ?')) return;
@@ -1476,6 +1683,7 @@ function renderImportedCompetitionsSettings(){
       data.settings.deletedCalendarCompetitions.push(btn.dataset.key);
       saveData();
       renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
       showToast('Compétition supprimée');
     });
   });
@@ -1490,19 +1698,91 @@ function renderImportedCompetitionsSettings(){
     ui.editingCompetitionKey = null;
     renderImportedCompetitionsSettings();
   });
+  const importedEditForm = wrap.querySelector('[data-form="imported-edit"]');
+  if(importedEditForm) wireAgeCategoryExclusivity(importedEditForm);
   const saveBtn = wrap.querySelector('[data-action="save-competition-edit"]');
   if(saveBtn) saveBtn.addEventListener('click', ()=>{
-    const row = saveBtn.closest('.convoc-row');
+    const row = saveBtn.closest('[data-form]');
     const name = row.querySelector('[data-field="name"]').value.trim();
     const city = row.querySelector('[data-field="city"]').value.trim();
     const address = row.querySelector('[data-field="address"]').value.trim();
+    const ageCategories = readAgeCategoriesFromForm(row);
     if(!data.settings.competitionOverrides) data.settings.competitionOverrides = {};
-    data.settings.competitionOverrides[saveBtn.dataset.key] = { name, city, address };
+    const prevOverride = data.settings.competitionOverrides[saveBtn.dataset.key] || {};
+    data.settings.competitionOverrides[saveBtn.dataset.key] = { ...prevOverride, name, city, address, ageCategories };
     saveData();
     ui.editingCompetitionKey = null;
     renderImportedCompetitionsSettings();
+    renderCompetitionsCalendarCard();
     showToast('Compétition mise à jour');
   });
+
+  wrap.querySelectorAll('[data-action="toggle-validate-imported"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!data.settings.competitionOverrides) data.settings.competitionOverrides = {};
+      const key = btn.dataset.key;
+      const existing = data.settings.competitionOverrides[key] || {};
+      const nowValidated = !existing.validated;
+      data.settings.competitionOverrides[key] = { ...existing, validated: nowValidated };
+      saveData();
+      renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
+      showToast(nowValidated ? 'Compétition validée' : 'Validation retirée');
+    });
+  });
+  wrap.querySelectorAll('[data-action="toggle-validate-manual"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const entry = (data.calendarEvents||[]).find(e=>e.id===btn.dataset.id);
+      if(!entry) return;
+      entry.validated = !entry.validated;
+      saveData();
+      renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
+      showToast(entry.validated ? 'Événement validé' : 'Validation retirée');
+    });
+  });
+
+  wrap.querySelectorAll('[data-action="edit-manual-event"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      ui.editingCompetitionKey = 'manual-'+btn.dataset.id;
+      renderImportedCompetitionsSettings();
+    });
+  });
+  wrap.querySelectorAll('[data-action="delete-manual-event"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!confirm('Supprimer cet événement du calendrier ?')) return;
+      data.calendarEvents = (data.calendarEvents||[]).filter(e=>e.id!==btn.dataset.id);
+      saveData();
+      renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
+      showToast('Événement supprimé');
+    });
+  });
+  const manualEditForm = wrap.querySelector('[data-form="manual-edit"]');
+  if(manualEditForm){
+    wireAgeCategoryExclusivity(manualEditForm);
+    manualEditForm.querySelector('[data-action="save-manual-edit"]').addEventListener('click', ()=>{
+      const id = manualEditForm.dataset.entryId;
+      const entry = (data.calendarEvents||[]).find(e=>e.id===id);
+      if(!entry) return;
+      entry.type = manualEditForm.querySelector('[data-field="type"]').value;
+      entry.name = manualEditForm.querySelector('[data-field="name"]').value.trim();
+      entry.date = manualEditForm.querySelector('[data-field="date"]').value;
+      entry.city = manualEditForm.querySelector('[data-field="city"]').value.trim();
+      entry.level = manualEditForm.querySelector('[data-field="level"]').value.trim();
+      entry.address = manualEditForm.querySelector('[data-field="address"]').value.trim();
+      entry.ageCategories = readAgeCategoriesFromForm(manualEditForm);
+      saveData();
+      ui.editingCompetitionKey = null;
+      renderImportedCompetitionsSettings();
+      renderCompetitionsCalendarCard();
+      showToast('Événement mis à jour');
+    });
+    manualEditForm.querySelector('[data-action="cancel-manual-edit"]').addEventListener('click', ()=>{
+      ui.editingCompetitionKey = null;
+      renderImportedCompetitionsSettings();
+    });
+  }
 }
 
 function renderBackendSettings(){
@@ -2334,6 +2614,204 @@ async function generateBirthdaysPdf(){
   }
 }
 
+/* ---------------- CALENDRIER : carte Suivi annuel ---------------- */
+function loadCalendarCardHidden(){
+  try{ const v = localStorage.getItem('dojo-calendar-hidden'); return v===null ? true : v==='1'; }catch(e){ return true; }
+}
+function saveCalendarCardHidden(val){
+  try{ localStorage.setItem('dojo-calendar-hidden', val?'1':'0'); }catch(e){}
+}
+function loadCalendarListHidden(){
+  try{ return localStorage.getItem('dojo-calendar-list-hidden')==='1'; }catch(e){ return false; }
+}
+function saveCalendarListHidden(val){
+  try{ localStorage.setItem('dojo-calendar-list-hidden', val?'1':'0'); }catch(e){}
+}
+function todayDateStr(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function buildCalendarTimelineHtml(entries){
+  if(entries.length===0) return '<div class="empty">Aucun événement à afficher pour cette sélection.</div>';
+  const todayStr = todayDateStr();
+  const upcoming = entries.filter(en=>en.date>=todayStr).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const passed = entries.filter(en=>en.date<todayStr).slice().sort((a,b)=>a.date.localeCompare(b.date));
+
+  let html = '';
+  let lastMonthKey = null;
+  function renderGroup(list){
+    list.forEach(en=>{
+      const d = new Date(en.date+'T00:00:00');
+      const monthKey = en.date.slice(0,7);
+      if(monthKey !== lastMonthKey){
+        html += `<div class="cal-month-head">${MONTH_NAMES_FR[d.getMonth()]} ${d.getFullYear()}</div>`;
+        lastMonthKey = monthKey;
+      }
+      const day = d.getDate();
+      const catsHtml = calendarCategoryTagsHtml(en.ageCategories);
+      const isPassed = en.date < todayStr;
+      html += `
+        <div class="cal-event type-${en.type}">
+          <div class="cal-daybox"><div class="d">${day}</div><div class="m">${MONTH_NAMES_FR[d.getMonth()].slice(0,3)}</div></div>
+          <div class="cal-info">
+            <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}${validatedBadgeHtml(en.validated || isPassed)}${en.level?' <span class="tag">'+escapeHtml(en.level)+'</span>':''}</div>
+            <div class="e">${escapeHtml(en.city||'')}</div>
+            <div class="cats">${catsHtml}</div>
+          </div>
+        </div>`;
+    });
+  }
+  renderGroup(upcoming);
+  if(passed.length){
+    html += `<div class="cal-section-divider">✓ Terminés</div>`;
+    lastMonthKey = null;
+    renderGroup(passed);
+  }
+  return html;
+}
+function renderCompetitionsCalendarCard(){
+  const wrap = document.getElementById('competitions-calendar');
+  if(!wrap) return;
+  const hidden = loadCalendarCardHidden();
+  const listHidden = loadCalendarListHidden();
+  const ageBandLabels = calendarSelectableCategories();
+  if(!ui.calendarCategoryFilter) ui.calendarCategoryFilter = 'all';
+  const entries = getAllCalendarEntries();
+  const filtered = ui.calendarCategoryFilter==='all' ? entries : entries.filter(en=>calendarEntryAppliesToCategory(en.ageCategories, ui.calendarCategoryFilter));
+
+  wrap.innerHTML = `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">📅 Calendrier compétitions &amp; stages</h2>
+        <button class="ghost icon-btn" id="toggleCalendarCardHidden" title="${hidden?'Afficher':'Masquer'} le calendrier" style="padding:8px 9px; font-size:13px; flex-shrink:0;">${hidden?'👁️ Afficher':'🙈 Masquer'}</button>
+      </div>
+      ${!hidden ? `
+      <p style="font-size:12.5px; color:var(--ink-dim); margin:10px 0 12px;">Toutes les compétitions et stages du calendrier — importés de la FFJDA et ajoutés manuellement dans l'onglet Param.</p>
+      <div class="row">
+        <div style="flex:1;">
+          <label class="small">Filtrer par catégorie</label>
+          <select id="calendarCategorySelect">
+            <option value="all" ${ui.calendarCategoryFilter==='all'?'selected':''}>Toutes les catégories</option>
+            ${ageBandLabels.map(l=>`<option value="${escapeHtml(l)}" ${ui.calendarCategoryFilter===l?'selected':''}>${escapeHtml(l)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="primary" id="generateGeneralCalendarBtn" style="flex:1;">📅 Calendrier général (PDF)</button>
+        <button class="ghost" id="generateCategoryCalendarBtn" style="flex:1;">🎯 PDF de cette catégorie</button>
+      </div>
+      <button class="ghost icon-btn" id="toggleCalendarListHidden" style="width:100%; margin-top:12px;">${listHidden ? '👁️ Afficher' : '🙈 Masquer'}</button>
+      ${!listHidden ? `<div id="calendar-timeline" style="margin-top:12px;">${buildCalendarTimelineHtml(filtered)}</div>` : ''}
+      ` : ''}
+    </div>
+  `;
+  const toggleBtn = document.getElementById('toggleCalendarCardHidden');
+  if(toggleBtn) toggleBtn.addEventListener('click', ()=>{ saveCalendarCardHidden(!hidden); renderCompetitionsCalendarCard(); });
+  const toggleListBtn = document.getElementById('toggleCalendarListHidden');
+  if(toggleListBtn) toggleListBtn.addEventListener('click', ()=>{ saveCalendarListHidden(!listHidden); renderCompetitionsCalendarCard(); });
+  const catSelect = document.getElementById('calendarCategorySelect');
+  if(catSelect) catSelect.addEventListener('change', ()=>{ ui.calendarCategoryFilter = catSelect.value; renderCompetitionsCalendarCard(); });
+  const genGeneralBtn = document.getElementById('generateGeneralCalendarBtn');
+  if(genGeneralBtn) genGeneralBtn.addEventListener('click', ()=> generateCalendarPdf('all'));
+  const genCatBtn = document.getElementById('generateCategoryCalendarBtn');
+  if(genCatBtn) genCatBtn.addEventListener('click', ()=> generateCalendarPdf(ui.calendarCategoryFilter));
+}
+const CALENDAR_PDF_COLS_PER_PAGE = 6;
+function chunkArray(arr, size){
+  const out = [];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+function monthsRangeFromEntries(entries){
+  if(entries.length===0) return [];
+  const keys = entries.map(e=>e.date.slice(0,7)).sort();
+  const [startY, startM] = keys[0].split('-').map(Number);
+  const [endY, endM] = keys[keys.length-1].split('-').map(Number);
+  const months = [];
+  let y = startY, m = startM;
+  while(y < endY || (y===endY && m<=endM)){
+    months.push({ year:y, month:m, key: `${y}-${String(m).padStart(2,'0')}` });
+    m++; if(m>12){ m=1; y++; }
+  }
+  return months;
+}
+function buildCalendarGridHtml(monthBlocks, logoSrc, title){
+  return `
+    <div class="recap-header">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
+      <div>
+        <div class="rh-club">${escapeHtml(data.clubName||'')}</div>
+        <div class="rh-sub">${escapeHtml(title)}</div>
+      </div>
+    </div>
+    <div class="pdfcal-grid">
+      ${monthBlocks.map(mb=>`
+        <div class="pdfcal-col">
+          <div class="pdfcal-col-head">${escapeHtml(mb.label)}</div>
+          <div class="pdfcal-col-body">
+            ${mb.entries.length===0 ? '<div class="pdfcal-col-empty">—</div>' : mb.entries.map(en=>{
+              const d = new Date(en.date+'T00:00:00');
+              const hasCategory = en.ageCategories==='all' || (Array.isArray(en.ageCategories) && en.ageCategories.length);
+              const catLabel = en.ageCategories==='all' ? 'Toutes cat.'
+                : (Array.isArray(en.ageCategories) && en.ageCategories.length ? en.ageCategories.join(', ') : 'Pas de catégorie');
+              return `
+              <div class="pdfcal-event type-${en.type}">
+                <div class="pce-day">${DAY_ABBR_FR[d.getDay()]} ${d.getDate()}${en.validated?' <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#3F8F3F; vertical-align:middle;"></span>':''}</div>
+                <div class="pce-name">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}</div>
+                ${en.city ? `<div class="pce-city">${escapeHtml(en.city)}</div>` : ''}
+                <div class="pce-cat"${hasCategory?'':' style="color:#B3492F; font-weight:700;"'}>${escapeHtml(catLabel)}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+async function generateCalendarPdf(categoryFilter){
+  if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
+    showToast('La génération de PDF n’a pas pu se charger — vérifie ta connexion');
+    return;
+  }
+  const allEntries = getAllCalendarEntries();
+  const entries = categoryFilter==='all' ? allEntries : allEntries.filter(en=>calendarEntryAppliesToCategory(en.ageCategories, categoryFilter));
+  if(entries.length===0){ showToast('Aucun événement à inclure pour cette sélection'); return; }
+
+  const btn = document.getElementById(categoryFilter==='all' ? 'generateGeneralCalendarBtn' : 'generateCategoryCalendarBtn');
+  const originalLabel = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Génération en cours…'; }
+  try{
+    const logoImg = document.querySelector('header.topbar .club-logo-light');
+    const logoSrc = logoImg ? logoImg.src : '';
+    const baseTitle = categoryFilter==='all' ? 'Calendrier général — Compétitions & stages' : `Calendrier — ${bandYearRangeLabel(categoryFilter)}`;
+
+    const months = monthsRangeFromEntries(entries);
+    const byMonth = {};
+    entries.forEach(en=>{ const k = en.date.slice(0,7); (byMonth[k] = byMonth[k]||[]).push(en); });
+    const monthBlocks = months.map(m=>({
+      label: `${MONTH_NAMES_FR[m.month-1]} ${m.year}`,
+      entries: (byMonth[m.key]||[]).slice().sort((a,b)=>a.date.localeCompare(b.date))
+    }));
+    const chunks = chunkArray(monthBlocks, CALENDAR_PDF_COLS_PER_PAGE);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'pt', format:'a4', orientation:'landscape' });
+    const margin = 24;
+    for(let i=0;i<chunks.length;i++){
+      if(i>0) pdf.addPage();
+      const pageTitle = baseTitle + (chunks.length>1 ? ` — page ${i+1}/${chunks.length}` : '');
+      const html = buildCalendarGridHtml(chunks[i], logoSrc, pageTitle);
+      const canvas = await captureOffscreenSection(html, 'recap-doc', 1000);
+      addCanvasSliced(pdf, canvas, margin);
+    }
+    const safeName = (categoryFilter==='all' ? 'general' : categoryFilter).replace(/[^\w-]+/g,'-');
+    pdf.save(`calendrier-${safeName}.pdf`);
+    showToast('Calendrier PDF généré');
+  } catch(err){
+    showToast('Échec de la génération : ' + (err.message||err));
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = originalLabel; }
+  }
+}
+
 function loadDismissedAtRisk(){
   try{ return JSON.parse(localStorage.getItem('dojo-dismissed-atrisk')||'{}'); }catch(e){ return {}; }
 }
@@ -3023,6 +3501,76 @@ function visibleCompetitionCalendar(){
   const deleted = data.settings.deletedCalendarCompetitions || [];
   return COMPETITION_CALENDAR.filter(c => !deleted.includes(competitionKey(c)));
 }
+
+/* ---------------- CALENDRIER : compétitions & stages, catégories d'âge ---------------- */
+function importedCompetitionAgeCategories(c){
+  const o = getCompetitionOverride(c);
+  if(o.ageCategories==='all') return 'all';
+  if(Array.isArray(o.ageCategories) && o.ageCategories.length) return o.ageCategories;
+  const guessed = matchConfiguredBandLabel(c.name + ' ' + (c.details||[]).join(' '));
+  return guessed ? [guessed] : [];
+}
+function calendarEntryAppliesToCategory(ageCategories, label){
+  if(ageCategories==='all') return true;
+  return Array.isArray(ageCategories) && ageCategories.includes(label);
+}
+function calendarCategoryTagsHtml(ageCategories){
+  if(ageCategories==='all') return '<span class="tag">Toutes catégories</span>';
+  if(Array.isArray(ageCategories) && ageCategories.length) return ageCategories.map(l=>`<span class="tag">${escapeHtml(l)}</span>`).join('');
+  return '<span class="tag" style="background:var(--clay-dim); color:var(--clay);">Pas de catégorie</span>';
+}
+function calendarSelectableCategories(){
+  return [...(data.settings.ageBands||[]).map(b=>b.label), 'Vétérans'];
+}
+function ageCategoryCheckboxesHtml(ageCategories){
+  const ageBandLabels = calendarSelectableCategories();
+  const isAll = ageCategories==='all';
+  const selectedArr = Array.isArray(ageCategories) ? ageCategories : [];
+  return `
+    <div>
+      <span class="field-label">Catégories d'âge concernées</span>
+      <div style="display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:4px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" data-cat="ALL" ${isAll?'checked':''}> Toutes catégories</label>
+        ${ageBandLabels.map(lbl=>`<label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" data-cat="${escapeHtml(lbl)}" ${(!isAll && selectedArr.includes(lbl))?'checked':''}> ${escapeHtml(lbl)}</label>`).join('')}
+      </div>
+    </div>`;
+}
+function readAgeCategoriesFromForm(formEl){
+  const boxes = Array.from(formEl.querySelectorAll('[data-cat]'));
+  const allBox = boxes.find(b=>b.dataset.cat==='ALL');
+  if(allBox && allBox.checked) return 'all';
+  return boxes.filter(b=>b.dataset.cat!=='ALL' && b.checked).map(b=>b.dataset.cat);
+}
+function wireAgeCategoryExclusivity(formEl){
+  const boxes = Array.from(formEl.querySelectorAll('[data-cat]'));
+  const allBox = boxes.find(b=>b.dataset.cat==='ALL');
+  boxes.forEach(b=>{
+    b.addEventListener('change', ()=>{
+      if(b.dataset.cat==='ALL' && b.checked){
+        boxes.forEach(o=>{ if(o!==b) o.checked=false; });
+      } else if(b.checked && allBox){
+        allBox.checked = false;
+      }
+    });
+  });
+}
+function getAllCalendarEntries(){
+  const imported = visibleCompetitionCalendar().map(c=>({
+    key: competitionKey(c), kind:'imported', type:'competition',
+    name: effectiveCompetitionName(c), date: c.date||'', dayLabel: c.dayLabel||'',
+    city: effectiveCompetitionCity(c), level: c.level||'',
+    ageCategories: importedCompetitionAgeCategories(c),
+    validated: getCompetitionOverride(c).validated === true
+  }));
+  const manual = (data.calendarEvents||[]).map(e=>({
+    key: 'manual-'+e.id, kind:'manual', id:e.id, type: e.type||'competition',
+    name: e.name||'', date: e.date||'', dayLabel:'',
+    city: e.city||'', level: e.level||'',
+    ageCategories: e.ageCategories!==undefined ? e.ageCategories : [],
+    validated: e.validated === true
+  }));
+  return [...imported, ...manual].filter(e=>e.date).sort((a,b)=> a.date.localeCompare(b.date));
+}
 function competitionsWithinNextMonth(){
   const today = new Date(); today.setHours(0,0,0,0);
   const cutoff = new Date(today.getFullYear(), today.getMonth()+1, today.getDate());
@@ -3480,6 +4028,7 @@ function renderResultsTab(){
   document.getElementById('downloadPalmaresPdfBtn').onclick = generateMemberPalmaresPdf;
   document.getElementById('generateRecapPdfBtn').onclick = generateMonthlyRecapPdf;
   document.getElementById('generateAnnualRecapBtn').onclick = generateAnnualRecapPdf;
+  document.getElementById('generateAGReportBtn').onclick = generateAGReportPdf;
   renderRecapCategoryFilter();
   initAddResultForm();
   initStageForm();
@@ -5107,6 +5656,155 @@ async function generateAnnualRecapPdf(){
   await generateRecapPdf(`Saison ${schoolYearLabel(seasonYear)}`, d => inSchoolYear(d, seasonYear), `saison-${schoolYearLabel(seasonYear)}`, 'generateAnnualRecapBtn');
 }
 
+/* ---------------- RAPPORT ANNUEL (ASSEMBLÉE GÉNÉRALE) ---------------- */
+function computeAGReportData(){
+  const seasonYear = data.settings.seasonStartYear || autoSeasonStartYear();
+
+  // Effectifs
+  const totalMembers = data.members.length;
+  const byGroup = data.groups.map(g=>({ name:g.name, count: data.members.filter(m=>m.groupId===g.id).length }));
+  const genderF = data.members.filter(m=>m.gender==='F').length;
+  const genderM = data.members.filter(m=>m.gender==='M').length;
+  const genderNR = totalMembers - genderF - genderM;
+  const byCategoryMap = {};
+  data.members.forEach(m=>{
+    const label = groupedCategoryLabel(m.birthDate) || 'Non renseignée';
+    byCategoryMap[label] = (byCategoryMap[label]||0) + 1;
+  });
+  const byCategory = Object.keys(byCategoryMap)
+    .sort((a,b)=> categoryBandSortIndex(a) - categoryBandSortIndex(b))
+    .map(label=>({ label, count: byCategoryMap[label] }));
+
+  // Présence
+  let sumPresent = 0, sumSlots = 0, totalSessions = 0;
+  const byGroupAttendance = data.groups.map(g=>{
+    const sessions = data.sessions.filter(s=>s.groupId===g.id && inSchoolYear(s.date, seasonYear) && sessionHasRollCall(s.id));
+    const members = data.members.filter(m=>m.groupId===g.id);
+    let present = 0;
+    members.forEach(m=>{ present += sessions.filter(s=>isPresent((data.attendance[s.id]||{})[m.id])).length; });
+    const slots = sessions.length * members.length;
+    sumPresent += present; sumSlots += slots; totalSessions += sessions.length;
+    const pct = slots ? Math.round((present/slots)*100) : 0;
+    return { name:g.name, sessions: sessions.length, members: members.length, pct };
+  });
+  const avgAttendancePct = sumSlots ? Math.round((sumPresent/sumSlots)*100) : 0;
+
+  // Résultats sportifs
+  const seasonEvents = (data.convocEvents||[]).filter(ev=>inSchoolYear(ev.date||'', seasonYear));
+  let totalParticipations = 0, gold = 0, silver = 0, bronze = 0;
+  let competitionsCount = 0;
+  seasonEvents.forEach(ev=>{
+    const presents = ev.recipients.filter(r=>r.response==='present');
+    if(presents.length===0) return;
+    competitionsCount++;
+    totalParticipations += presents.length;
+    presents.forEach(r=>{
+      if(String(r.result)==='1') gold++;
+      else if(String(r.result)==='2') silver++;
+      else if(String(r.result)==='3') bronze++;
+    });
+  });
+
+  // Stages
+  const seasonStages = (data.stages||[]).filter(s=> s.validated && s.dateStart && inSchoolYear(s.dateStart, seasonYear));
+  const stagesCount = seasonStages.length;
+  const stagesParticipations = seasonStages.reduce((a,s)=>a+((s.participants||[]).length),0);
+
+  return {
+    seasonYear, totalMembers, byGroup, genderF, genderM, genderNR, byCategory,
+    byGroupAttendance, avgAttendancePct, totalSessions,
+    competitionsCount, totalParticipations, gold, silver, bronze,
+    stagesCount, stagesParticipations
+  };
+}
+function buildAGReportHtml(r, logoSrc){
+  const sectionTitle = (label)=> `<div style="font-family:'Rajdhani',sans-serif; font-weight:800; font-size:17px; border-left:5px solid #6F8248; padding-left:10px; margin:22px 0 10px;">${escapeHtml(label)}</div>`;
+  return `
+    <div class="recap-header">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
+      <div>
+        <div class="rh-club">${escapeHtml(data.clubName||'')}</div>
+        <div class="rh-sub">Rapport annuel — Assemblée générale — Saison ${escapeHtml(schoolYearLabel(r.seasonYear))}</div>
+      </div>
+    </div>
+
+    ${sectionTitle('Effectifs')}
+    <div class="recap-summary">
+      <div class="box"><div class="n">${r.totalMembers}</div><div class="l">Licenciés</div></div>
+      <div class="box"><div class="n">${data.groups.length}</div><div class="l">Cours</div></div>
+      <div class="box"><div class="n">${r.genderF}F / ${r.genderM}G</div><div class="l">Répartition</div></div>
+    </div>
+    <table class="recap-table">
+      <tr><th>Cours</th><th>Licenciés</th></tr>
+      ${r.byGroup.map(g=>`<tr><td>${escapeHtml(g.name)}</td><td>${g.count}</td></tr>`).join('')}
+    </table>
+    <table class="recap-table" style="margin-top:14px;">
+      <tr><th>Catégorie</th><th>Licenciés</th></tr>
+      ${r.byCategory.map(c=>`<tr><td>${escapeHtml(bandYearRangeLabel(c.label))}</td><td>${c.count}</td></tr>`).join('')}
+    </table>
+
+    ${sectionTitle('Présence aux entraînements')}
+    <div class="recap-summary">
+      <div class="box"><div class="n">${r.totalSessions}</div><div class="l">Séances</div></div>
+      <div class="box"><div class="n">${r.avgAttendancePct}%</div><div class="l">Présence moyenne</div></div>
+    </div>
+    <table class="recap-table">
+      <tr><th>Cours</th><th>Séances</th><th>Taux moyen</th></tr>
+      ${r.byGroupAttendance.map(g=>`<tr><td>${escapeHtml(g.name)}</td><td>${g.sessions}</td><td>${g.sessions?g.pct+'%':'—'}</td></tr>`).join('')}
+    </table>
+
+    ${sectionTitle('Résultats sportifs')}
+    <div class="recap-summary">
+      <div class="box"><div class="n">${r.competitionsCount}</div><div class="l">Compétitions</div></div>
+      <div class="box"><div class="n">${r.totalParticipations}</div><div class="l">Participations</div></div>
+      <div class="box"><div class="n">${r.gold+r.silver+r.bronze}</div><div class="l">Médailles</div></div>
+    </div>
+    <div class="recap-medals">
+      <div class="chip" style="${medalStyle('1')}">🥇 ${r.gold}</div>
+      <div class="chip" style="${medalStyle('2')}">🥈 ${r.silver}</div>
+      <div class="chip" style="${medalStyle('3')}">🥉 ${r.bronze}</div>
+    </div>
+
+    ${sectionTitle('Stages')}
+    <div class="recap-summary">
+      <div class="box"><div class="n">${r.stagesCount}</div><div class="l">Stages organisés</div></div>
+      <div class="box"><div class="n">${r.stagesParticipations}</div><div class="l">Participations</div></div>
+    </div>
+  `;
+}
+async function generateAGReportPdf(){
+  if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
+    showToast('La génération de PDF n’a pas pu se charger — vérifie ta connexion');
+    return;
+  }
+  if(data.members.length===0){
+    showToast('Aucune donnée à inclure dans le rapport pour l’instant');
+    return;
+  }
+  const btn = document.getElementById('generateAGReportBtn');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Génération en cours…';
+  try{
+    const r = computeAGReportData();
+    const logoImg = document.querySelector('header.topbar .club-logo-light');
+    const logoSrc = logoImg ? logoImg.src : '';
+    const html = buildAGReportHtml(r, logoSrc);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'pt', format:'a4' });
+    const margin = 24;
+    const canvas = await captureOffscreenSection(html, 'recap-doc', 700);
+    addCanvasSliced(pdf, canvas, margin);
+    pdf.save(`rapport-annuel-ag-${schoolYearLabel(r.seasonYear).replace(/[^\w-]+/g,'-')}.pdf`);
+    showToast('Rapport annuel généré');
+  } catch(err){
+    showToast('Échec de la génération : ' + (err.message||err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
 function convocSelectedMembers(){
   const currentEventName = document.getElementById('convocEvent').value.trim();
   const existingEvent = currentEventName
@@ -5855,7 +6553,7 @@ footer.className = 'settings-foot';
 footer.innerHTML = `<button id="resetBtn">Réinitialiser toutes les données</button>`;
 document.getElementById('tab-param').appendChild(footer);
 footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
-  if(!confirm('Ceci efface DÉFINITIVEMENT tous les cours, pratiquants, séances, convocations, résultats, stages et archives de saison. Les catégories d\'âge, réglages et coordonnées du club sont conservés. Continuer ?')) return;
+  if(!confirm('Ceci efface DÉFINITIVEMENT tous les cours, pratiquants, séances, convocations, résultats, stages, archives de saison et événements de calendrier ajoutés manuellement. Les catégories d\'âge, réglages et coordonnées du club sont conservés. Continuer ?')) return;
   data = {
     clubName: data.clubName,
     clubContact: data.clubContact,
@@ -5866,6 +6564,7 @@ footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
     convocEvents: [],
     stages: [],
     archivedSeasons: [],
+    calendarEvents: [],
     settings: {
       ageBands: data.settings.ageBands,
       seasonStartYear: data.settings.seasonStartYear,
