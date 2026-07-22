@@ -2657,9 +2657,14 @@ function updateConvocLinks(){
 function renderConvocSchedule(){
   const wrap = document.getElementById('convoc-schedule');
   if(!wrap) return;
-  const cats = groupedCategoriesAvailable();
-  let categoryValue = 'all';
-  if(ui.convocCategory && (ui.convocCategory==='all' || cats.includes(ui.convocCategory))) categoryValue = ui.convocCategory;
+  const restrictedCats = restrictedCategoriesForCurrentEvent();
+  const cats = restrictedCats || groupedCategoriesAvailable();
+  let categoryValue = restrictedCats ? restrictedCats[0] : 'all';
+  if(restrictedCats){
+    if(ui.convocCategory && restrictedCats.includes(ui.convocCategory)) categoryValue = ui.convocCategory;
+  } else if(ui.convocCategory && (ui.convocCategory==='all' || cats.includes(ui.convocCategory))){
+    categoryValue = ui.convocCategory;
+  }
   ui.convocCategory = categoryValue;
 
   const membersRaw = categoryValue==='all' ? data.members : data.members.filter(m=>memberMatchesGroupedCategory(m, categoryValue));
@@ -2670,14 +2675,16 @@ function renderConvocSchedule(){
   const isAlreadyInvited = m => !!(existingEvent && existingEvent.recipients.some(r=>r.memberId===m.id));
   const selectedCount = members.filter(m=> isAlreadyInvited(m) || ui.convocChecked[m.id]===true).length;
   const expanded = !!ui.convocMembersExpanded;
+  const restrictionNote = restrictedCats ? `<p style="font-size:12px; color:var(--ink-dim); margin:-4px 0 10px;">Catégorie limitée automatiquement d'après le nom de la compétition.</p>` : '';
 
   membersWrap.innerHTML = `
     <h2 style="margin-bottom:10px;">Destinataires</h2>
+    ${restrictionNote}
     <div class="row" style="margin:0 0 10px;">
       <div style="flex:1">
         <label class="small">Catégorie d'âge</label>
         <select id="convocCategorySel">
-          <option value="all" ${categoryValue==='all'?'selected':''}>Toutes les catégories</option>
+          ${restrictedCats ? '' : `<option value="all" ${categoryValue==='all'?'selected':''}>Toutes les catégories</option>`}
           ${cats.map(c=>`<option value="${escapeHtml(c)}" ${categoryValue===c?'selected':''}>${escapeHtml(bandYearRangeLabel(c))}</option>`).join('')}
         </select>
       </div>
