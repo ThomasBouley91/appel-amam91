@@ -2759,8 +2759,7 @@ function renderConvocTab(){
   const eventSel = document.getElementById('convocEventSel');
   const currentEventName = document.getElementById('convocEvent').value.trim();
   const sortedEvents = [...data.convocEvents].filter(ev=>!ev.archived).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
-  eventSel.innerHTML = `<option value="">+ Nouvel événement</option>` + sortedEvents.map(ev=>`<option value="${escapeHtml(ev.name)}" ${ev.name===currentEventName?'selected':''}>${escapeHtml(ev.name)}</option>`).join('');
-  eventSel.onchange = ()=>{
+eventSel.innerHTML = `<option value="">— Nouvel événement —</option>` + sortedEvents.map(ev=>`<option value="${escapeHtml(ev.name)}" ${ev.name===currentEventName?'selected':''}>${escapeHtml(ev.name)}</option>`).join('');  eventSel.onchange = ()=>{
     if(eventSel.value){
       document.getElementById('convocEvent').value = eventSel.value;
       const ev = data.convocEvents.find(e=>e.name===eventSel.value);
@@ -2857,14 +2856,15 @@ function renderConvocTab(){
     const ev = ensureConvocEvent(convocSelectedMembers());
     ev.emailSent = true;
     saveData();
-    renderConvocCurrent(); renderConvocArchive();
     window.location.href = `mailto:?bcc=${encodeURIComponent(emails.join(','))}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    resetConvocFormAfterGeneration();
   });
   document.getElementById('convocWaBtn').addEventListener('click', ()=>{
     const { body, selectedCount } = buildConvocTextMessage();
     if(selectedCount===0){ showToast('Sélectionne au moins un pratiquant à convoquer'); return; }
-    renderConvocCurrent(); renderConvocArchive();
+    const ev = ensureConvocEvent(convocSelectedMembers());
     window.open(`https://wa.me/?text=${encodeURIComponent(body)}`, '_blank');
+    resetConvocFormAfterGeneration();
   });
 
   document.getElementById('addScheduleRowBtn').onclick = ()=>{
@@ -2910,6 +2910,19 @@ function resetConvocForm(){
   try{ localStorage.removeItem('dojo-convoc-draft'); }catch(e){}
   renderConvocTab();
   showToast('Formulaire réinitialisé');
+}
+function resetConvocFormAfterGeneration(){
+  ui.convocSchedule = [];
+  ui.convocChecked = {};
+  ui.convocVeteranFlag = {};
+  document.getElementById('convocEvent').value = '';
+  document.getElementById('convocDate').value = '';
+  document.getElementById('convocLieu').value = '';
+  document.getElementById('convocVille').value = '';
+  document.getElementById('convocConsignes').value = "NE PAS OUBLIER : Le PASSEPORT SPORTIF en règle OBLIGATOIRE avec au moins 2 timbres de licences (dont saison en cours) pour les benjamins et minimes.";
+  document.getElementById('convocReplyDeadline').value = '';
+  try{ localStorage.removeItem('dojo-convoc-draft'); }catch(e){}
+  renderConvocTab();
 }
 
 /* ---------------- RÉSULTATS ---------------- */
@@ -5097,8 +5110,8 @@ function openConvocPrint(){
   const ctx = buildConvocContext();
   const members = convocSelectedMembers();
   if(members.length===0){ showToast('Sélectionne au moins un pratiquant à convoquer'); return; }
-  const ev = ensureConvocEvent(members);
-  renderConvocCurrent(); renderConvocArchive();
+const ev = ensureConvocEvent(members);
+  resetConvocFormAfterGeneration();
 
   const overlay = document.getElementById('convoc-print-overlay');
   const cardsHtml = members.map(m=>{
@@ -5162,7 +5175,7 @@ async function generateConvocPrintPdf(members, ctx, ev){
       addCanvasSliced(pdf, canvas, margin);
     }
 
-    const safeName = (document.getElementById('convocEvent').value.trim()||'convocation').replace(/[^\w-]+/g,'-');
+const safeName = ((ev && ev.name) ? ev.name.trim() : 'convocation').replace(/[^\w-]+/g,'-');
     pdf.save(`convocations-${safeName}.pdf`);
     showToast('PDF généré — 2 convocations par page');
   } catch(err){
@@ -5189,6 +5202,7 @@ async function sendConvocationsWithPdf(){
   const event = document.getElementById('convocEvent').value.trim() || 'Convocation';
   const ev = ensureConvocEvent(members);
   const ctx = buildConvocContext(ev);
+  resetConvocFormAfterGeneration();
   let baseTextBody = `Bonjour,\n\nVotre enfant est convoqué(e) à : ${ctx.event}\n`;
   if(ctx.dateLabel) baseTextBody += `Date : ${ctx.dateLabel}\n`;
   if(ctx.lieu) baseTextBody += `Lieu : ${ctx.lieu}\n`;
