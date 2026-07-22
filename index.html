@@ -3569,6 +3569,59 @@ function renderStageHistory(){
       showToast(`Stage « ${s.name} » rouvert`);
     });
   });
+  card.querySelectorAll('[data-action="download-stage-pdf"]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      generateStagePdf(btn.dataset.id);
+    });
+  });
+}
+
+async function generateStagePdf(stageId){
+  if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
+    showToast('La génération de PDF n’a pas pu se charger — vérifie ta connexion');
+    return;
+  }
+  const s = (data.stages||[]).find(x=>x.id===stageId);
+  if(!s){ showToast('Stage introuvable'); return; }
+  if(s.participants.length===0){ showToast('Aucun participant enregistré pour ce stage'); return; }
+
+  try{
+    const sorted = [...s.participants].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+    const rows = sorted.map(p=>({ html: `<td>${nameWithBoldSurname(p.name)}</td>`, isDivider:false, categoryLabel:null }));
+
+    const logoImg = document.querySelector('header.topbar .club-logo-light');
+    const logoSrc = logoImg ? logoImg.src : '';
+    const buildContextHtml = (isFirst)=> !isFirst ? '' : `
+      <div class="recap-header">
+        ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
+        <div>
+          <div class="rh-club">${escapeHtml(data.clubName||'')}</div>
+          <div class="rh-sub">Stage — ${escapeHtml(s.name)}${stageDateRangeLabel(s)?' — '+escapeHtml(stageDateRangeLabel(s)):''}</div>
+        </div>
+      </div>
+      <div class="recap-summary">
+        <div class="box"><div class="n">${s.participants.length}</div><div class="l">Participants</div></div>
+      </div>`;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit:'pt', format:'a4' });
+    const margin = 24;
+    await paginateRowsIntoPdf(pdf, {
+      rows,
+      tableHeadHtml: '<th>Élève</th>',
+      buildContextHtml,
+      containerClass: 'recap-doc',
+      containerWidthPx: 500,
+      margin
+    });
+
+    const safeName = s.name.replace(/[^\w-]+/g,'-');
+    pdf.save(`stage-${safeName}.pdf`);
+    showToast('PDF généré');
+  } catch(err){
+    showToast('Échec de la génération : ' + (err.message||err));
+  }
 }
 
 function initAddResultForm(){
