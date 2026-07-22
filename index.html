@@ -4750,11 +4750,14 @@ function sortedCategoryLabels(labels){
 }
 
 async function generateEventResultsPdf(){
+  await generateEventResultsPdfForId(ui.resultsEventId);
+}
+async function generateEventResultsPdfForId(eventId){
   if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
     showToast('La génération de PDF n’a pas pu se charger — vérifie ta connexion');
     return;
   }
-  const ev = data.convocEvents.find(e=>e.id===ui.resultsEventId);
+  const ev = data.convocEvents.find(e=>e.id===eventId);
   if(!ev){ showToast('Choisis d’abord un événement'); return; }
   const presents = ev.recipients.filter(r=>r.response==='present');
   if(presents.length===0){ showToast('Aucun participant présent pour cet événement'); return; }
