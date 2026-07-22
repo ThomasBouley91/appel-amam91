@@ -3032,6 +3032,32 @@ function renderCalendarCompetitionSuggestions(list, wrap){
     </div>`).join('') || '<div class="empty" style="padding:10px;">Aucune compétition dans le mois à venir pour ce mot-clé.</div>';
   wrap.classList.add('show');
 }
+  function loadExistingCompetitionHidden(){
+  try{ return localStorage.getItem('dojo-existing-competition-hidden')==='1'; }catch(e){ return false; }
+}
+function saveExistingCompetitionHidden(val){
+  try{ localStorage.setItem('dojo-existing-competition-hidden', val?'1':'0'); }catch(e){}
+}
+function loadNewConvocFormHidden(){
+  try{ return localStorage.getItem('dojo-new-convoc-form-hidden')==='1'; }catch(e){ return false; }
+}
+function saveNewConvocFormHidden(val){
+  try{ localStorage.setItem('dojo-new-convoc-form-hidden', val?'1':'0'); }catch(e){}
+}
+function applyConvocSectionsVisibility(){
+  const existingHidden = loadExistingCompetitionHidden();
+  const existingBody = document.getElementById('existing-competition-body');
+  const existingBtn = document.getElementById('toggleExistingCompetitionBtn');
+  if(existingBody) existingBody.style.display = existingHidden ? 'none' : 'block';
+  if(existingBtn) existingBtn.textContent = existingHidden ? '👁️ Afficher' : '🙈 Masquer';
+
+  const newHidden = loadNewConvocFormHidden();
+  const newBody = document.getElementById('convoc-form-detail');
+  const newBtn = document.getElementById('toggleNewConvocFormBtn');
+  if(newBody) newBody.style.display = newHidden ? 'none' : 'block';
+  if(newBtn) newBtn.textContent = newHidden ? '👁️ Afficher' : '🙈 Masquer';
+}
+function initCalendarCompetitionPicker(){
 function initCalendarCompetitionPicker(){
   const input = document.getElementById('calendarCompetitionInput');
   const wrap = document.getElementById('calendarCompetitionSuggestions');
