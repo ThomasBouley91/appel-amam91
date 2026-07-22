@@ -2759,11 +2759,17 @@ function renderConvocTab(){
   const eventSel = document.getElementById('convocEventSel');
   const currentEventName = document.getElementById('convocEvent').value.trim();
   const sortedEvents = [...data.convocEvents].filter(ev=>!ev.archived).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
-eventSel.innerHTML = `<option value="">— Nouvel événement —</option>` + sortedEvents.map(ev=>`<option value="${escapeHtml(ev.name)}" ${ev.name===currentEventName?'selected':''}>${escapeHtml(ev.name)}</option>`).join('');  eventSel.onchange = ()=>{
+  eventSel.innerHTML = `<option value="">— Nouvel événement —</option>` + sortedEvents.map(ev=>`<option value="${escapeHtml(ev.name)}" ${ev.name===currentEventName?'selected':''}>${escapeHtml(ev.name)}</option>`).join('');
+  eventSel.onchange = ()=>{
     if(eventSel.value){
-      document.getElementById('convocEvent').value = eventSel.value;
       const ev = data.convocEvents.find(e=>e.name===eventSel.value);
-      if(ev && ev.date) document.getElementById('convocDate').value = ev.date;
+      document.getElementById('convocEvent').value = eventSel.value;
+      document.getElementById('convocDate').value = (ev && ev.date) || '';
+      document.getElementById('convocLieu').value = (ev && ev.lieu) || '';
+      document.getElementById('convocVille').value = (ev && ev.ville) || '';
+      document.getElementById('convocConsignes').value = (ev && ev.consignes !== undefined) ? ev.consignes : "NE PAS OUBLIER : Le PASSEPORT SPORTIF en règle OBLIGATOIRE avec au moins 2 timbres de licences (dont saison en cours) pour les benjamins et minimes.";
+      document.getElementById('convocReplyDeadline').value = (ev && ev.deadline) || '';
+      ui.convocSchedule = (ev && ev.schedule) ? JSON.parse(JSON.stringify(ev.schedule)) : [];
       const detail = document.getElementById('convoc-form-detail');
       if(detail) detail.style.display = 'block';
     } else {
