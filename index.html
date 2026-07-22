@@ -3537,7 +3537,10 @@ function renderStageHistory(){
       ${open ? `
       <div style="padding:4px 2px 10px;">
         ${s.participants.map(p=>`<div class="convoc-row"><div class="info"><div class="n">${nameWithBoldSurname(p.name)}</div></div></div>`).join('')}
-        <button class="ghost icon-btn" data-action="reopen-stage" data-id="${s.id}" style="width:100%; margin-top:6px; font-size:12.5px;">Rouvrir pour modifier</button>
+        <div class="row" style="margin-top:6px;">
+          <button class="ghost icon-btn" data-action="download-stage-pdf" data-id="${s.id}" style="flex:1; font-size:12.5px;">${ICON_PDF} Télécharger le PDF</button>
+          <button class="ghost icon-btn" data-action="reopen-stage" data-id="${s.id}" style="flex:1; font-size:12.5px;">Rouvrir pour modifier</button>
+        </div>
       </div>` : ''}
       `;
     }).join(''))}
