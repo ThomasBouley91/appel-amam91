@@ -3291,7 +3291,10 @@ function renderResultsHistoryDetail(ev){
   const presents = ev.recipients.filter(r=>r.response==='present');
   return `
     <div class="meta" style="margin-bottom:8px;">${ev.date?fmtDate(ev.date):''}${ev.ville?' — '+escapeHtml(ev.ville):''} · ${presents.length} participant${presents.length===1?'':'s'}</div>
-    <button class="ghost icon-btn" data-action="unarchive-results-event" data-id="${ev.id}" style="width:100%; margin-bottom:10px; font-size:12.5px;">Désarchiver — remettre dans la liste de travail</button>
+    <div class="row" style="margin-bottom:10px;">
+      <button class="ghost icon-btn" data-action="download-history-event-pdf" data-id="${ev.id}" style="flex:1; font-size:12.5px;">${ICON_PDF} Télécharger le PDF</button>
+      <button class="ghost icon-btn" data-action="unarchive-results-event" data-id="${ev.id}" style="flex:1; font-size:12.5px;">Désarchiver</button>
+    </div>
     ${renderArchivedEventResultsHtml(ev)}
   `;
 }
