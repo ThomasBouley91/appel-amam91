@@ -3083,6 +3083,16 @@ function initCalendarCompetitionPicker(){
     detail.style.display = isHidden ? 'block' : 'none';
     if(isHidden) document.getElementById('convocEvent').focus();
   });
+  const moreOptionsBtn = document.getElementById('convocMoreOptionsBtn');
+  if(moreOptionsBtn){
+    moreOptionsBtn.addEventListener('click', ()=>{
+      const panel = document.getElementById('convoc-more-options');
+      const icon = document.getElementById('convocMoreOptionsIcon');
+      const isHidden = panel.style.display === 'none' || !panel.style.display;
+      panel.style.display = isHidden ? 'block' : 'none';
+      if(icon) icon.textContent = isHidden ? '▴' : '▾';
+    });
+  }
 }
 const QUALIFICATION_COMPETITIONS = {
   'Benjamins': [
