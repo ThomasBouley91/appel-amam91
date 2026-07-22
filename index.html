@@ -521,6 +521,11 @@
           <select id="calendarCompetitionSelect"></select>
         </div>
         <div id="calendarCompetitionNote"></div>
+        <div id="calendarCompetitionOtherBox" style="display:none; margin-top:10px;">
+          <label class="small">Rechercher une compétition ou un stage du calendrier</label>
+          <input type="text" id="calendarCompetitionOtherInput" placeholder="Tape un nom, une ville…">
+          <div id="calendarCompetitionOtherResults" style="margin-top:6px;"></div>
+        </div>
         <div class="row" style="margin-top:14px;">
           <div style="flex:1">
             <label class="small">Convocations déjà créées</label>
@@ -3741,6 +3746,49 @@ function pickCalendarCompetition(idx){
   applyConvocSectionsVisibility();
   showToast(`« ${fullEventName} » — infos pré-remplies`);
 }
+function pickCalendarEntryOther(entry){
+  if(entry.kind==='imported'){
+    const idx = COMPETITION_CALENDAR.findIndex(c=>competitionKey(c)===entry.key);
+    if(idx>=0){ pickCalendarCompetition(idx); return; }
+  }
+  const e = (data.calendarEvents||[]).find(x=>x.id===entry.id);
+  if(!e) return;
+  document.getElementById('convocEvent').value = e.name||'';
+  if(e.date) document.getElementById('convocDate').value = e.date;
+  document.getElementById('convocVille').value = e.city||'';
+  document.getElementById('convocLieu').value = e.address||'';
+  saveConvocDraft();
+  const noteWrap = document.getElementById('calendarCompetitionNote');
+  if(noteWrap){
+    noteWrap.innerHTML = `<div style="background:#F1F4EA; border-radius:8px; padding:10px 12px; margin-top:8px; font-size:12.5px; line-height:1.5;">
+      📋 <strong>Infos du calendrier</strong> — ${e.type==='stage'?'Stage':'Compétition'} ajouté(e) manuellement${e.level?' · Niveau : '+escapeHtml(e.level):''}<br><em>Pas d'horaires de pesée disponibles — ajoute-les manuellement si besoin.</em>
+    </div>`;
+  }
+  saveNewConvocFormHidden(false);
+  applyConvocSectionsVisibility();
+  showToast(`« ${e.name} » — infos pré-remplies`);
+}
+function renderCalendarOtherSearchResults(query){
+  const wrap = document.getElementById('calendarCompetitionOtherResults');
+  if(!wrap) return;
+  const q = query.trim().toLowerCase();
+  if(!q){ wrap.innerHTML = ''; return; }
+  const all = getAllCalendarEntries();
+  const matches = all.filter(en=> (en.name||'').toLowerCase().includes(q) || (en.city||'').toLowerCase().includes(q));
+  wrap.innerHTML = matches.slice(0,50).map(en=>`
+    <div class="convoc-row" data-action="pick-calendar-other" data-key="${escapeHtml(en.key)}" style="cursor:pointer;">
+      <div class="info">
+        <div class="n">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}${en.level?' <span class="tag">'+escapeHtml(en.level)+'</span>':''}</div>
+        <div class="e">${en.date?fmtDate(en.date):''} · ${escapeHtml(en.city||'')}</div>
+      </div>
+    </div>`).join('') || '<div class="empty" style="padding:10px;">Aucun résultat.</div>';
+  wrap.querySelectorAll('[data-action="pick-calendar-other"]').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const entry = all.find(en=>en.key===row.dataset.key);
+      if(entry) pickCalendarEntryOther(entry);
+    });
+  });
+}
 function initCalendarCompetitionPicker(){
   const select = document.getElementById('calendarCompetitionSelect');
   if(select){
@@ -3752,14 +3800,27 @@ function initCalendarCompetitionPicker(){
       const levelPart = c.level ? ` (${c.level})` : '';
       const label = `${already}${effectiveCompetitionName(c)}${levelPart} — ${dateLabel} · ${effectiveCompetitionCity(c)}`;
       return `<option value="${idx}">${escapeHtml(label)}</option>`;
-    }).join('');
+    }).join('') + `<option value="other">Autre…</option>`;
     select.addEventListener('change', ()=>{
+      const otherBox = document.getElementById('calendarCompetitionOtherBox');
+      if(select.value === 'other'){
+        if(otherBox) otherBox.style.display = 'block';
+        const otherInput = document.getElementById('calendarCompetitionOtherInput');
+        if(otherInput) otherInput.value = '';
+        renderCalendarOtherSearchResults('');
+        return;
+      }
+      if(otherBox) otherBox.style.display = 'none';
       if(!select.value){
         resetCompetitionFormFields();
         return;
       }
       pickCalendarCompetition(parseInt(select.value,10));
     });
+    const otherInput = document.getElementById('calendarCompetitionOtherInput');
+    if(otherInput){
+      otherInput.addEventListener('input', ()=> renderCalendarOtherSearchResults(otherInput.value));
+    }
   }
   const moreOptionsBtn = document.getElementById('convocMoreOptionsBtn');
   if(moreOptionsBtn){
