@@ -2651,6 +2651,79 @@ function updateConvocLinks(){
     waBtn.disabled = convocSelectedMembers().length===0;
   }
 }
+  function renderConvocSchedule(){
+  const wrap = document.getElementById('convoc-schedule');
+  if(!wrap) return;
+  const times = convocTimeOptions();
+  const restrictedScheduleCats = restrictedCategoriesForCurrentEvent();
+  const cats = restrictedScheduleCats || groupedCategoriesAvailable();
+  wrap.innerHTML = ui.convocSchedule.map((r,i)=>`
+    <div class="schedule-block" data-idx="${i}">
+      <div class="row" style="margin:0;">
+        <select data-field="heureDebut">
+          <option value="">Début</option>
+          ${times.map(t=>`<option value="${t}" ${r.heureDebut===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <select data-field="heureFin">
+          <option value="">Fin</option>
+          ${times.map(t=>`<option value="${t}" ${r.heureFin===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <select data-field="categorie" style="flex:1;">
+          <option value="">Catégorie</option>
+          ${cats.map(c=>{ const label = bandYearRangeLabel(c); return `<option value="${escapeHtml(label)}" ${r.categorie===label?'selected':''}>${escapeHtml(label)}</option>`; }).join('')}
+        </select>
+        <button class="ghost icon-btn" data-action="del-schedule" data-idx="${i}">✕</button>
+      </div>
+      ${renderScheduleWeightField(r, i)}
+    </div>`).join('') || '<div class="empty" style="padding:4px 2px; font-size:13px;">Aucune ligne — ajoute les créneaux de la compétition.</div>';
+  wrap.querySelectorAll('.schedule-block').forEach(block=>{
+    const idx = parseInt(block.dataset.idx,10);
+    block.querySelectorAll('select[data-field]').forEach(sel=>{
+      sel.addEventListener('change', ()=>{
+        ui.convocSchedule[idx][sel.dataset.field] = sel.value;
+        saveConvocDraft();
+        if(sel.dataset.field==='categorie') renderConvocSchedule();
+      });
+    });
+  });
+  wrap.querySelectorAll('[data-field="weightText"]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const idx = parseInt(inp.dataset.idx,10);
+      ui.convocSchedule[idx].weightText = inp.value;
+      saveConvocDraft();
+    });
+  });
+  wrap.querySelectorAll('[data-action="toggle-schedule-weight"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.idx,10);
+      ui.scheduleWeightExpanded[idx] = !ui.scheduleWeightExpanded[idx];
+      renderConvocSchedule();
+    });
+  });
+  wrap.querySelectorAll('[data-action="schedule-weight-check"]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const idx = parseInt(cb.dataset.idx,10);
+      const row = ui.convocSchedule[idx];
+      row.weights = row.weights || [];
+      if(cb.checked){ if(!row.weights.includes(cb.value)) row.weights.push(cb.value); }
+      else { row.weights = row.weights.filter(w=>w!==cb.value); }
+      saveConvocDraft();
+      const count = row.weights.length;
+      const label = wrap.querySelector(`[data-action="toggle-schedule-weight"][data-idx="${idx}"] span:first-child`);
+      if(label) label.textContent = `Poids : ${count ? count+' sélectionné'+(count>1?'s':'') : 'aucun sélectionné'}`;
+    });
+  });
+  wrap.querySelectorAll('[data-action="del-schedule"]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      ui.convocSchedule.splice(parseInt(btn.dataset.idx,10),1);
+      renderConvocSchedule();
+      saveConvocDraft();
+    });
+  });
+}
+function renderConvocTab(){
 function renderConvocTab(){
   const membersWrap = document.getElementById('convoc-members');
   if(!membersWrap) return;
