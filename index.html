@@ -3101,9 +3101,11 @@ function initCalendarCompetitionPicker(){
       return `<option value="${idx}">${escapeHtml(label)}</option>`;
     }).join('');
     select.addEventListener('change', ()=>{
-      if(!select.value) return;
+      if(!select.value){
+        resetCompetitionFormFields();
+        return;
+      }
       pickCalendarCompetition(parseInt(select.value,10));
-      select.value = '';
     });
   }
   const moreOptionsBtn = document.getElementById('convocMoreOptionsBtn');
