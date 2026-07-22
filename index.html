@@ -595,6 +595,9 @@
           <button class="ghost icon-btn" id="downloadEventPdfBtn" title="Télécharger le PDF de cet événement" style="flex-shrink:0; padding:8px 9px;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
           </button>
+          <button class="ghost icon-btn" id="shareSocialVisualBtn" title="Créer un visuel pour les réseaux sociaux" style="flex-shrink:0; padding:8px 9px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
         </div>
       </div>
       <div id="add-result-form" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);">
@@ -3402,10 +3405,17 @@ function ensureConvocEvent(members){
   return ev;
 }
 function snapshotConvocFormOntoEvent(ev){
-  ev.lieu = document.getElementById('convocLieu').value.trim();
-  ev.ville = document.getElementById('convocVille').value.trim();
-  ev.consignes = document.getElementById('convocConsignes').value.trim();
-  ev.deadline = document.getElementById('convocReplyDeadline').value;
+  const lieuVal = document.getElementById('convocLieu').value.trim();
+  const villeVal = document.getElementById('convocVille').value.trim();
+  const consignesVal = document.getElementById('convocConsignes').value.trim();
+  const deadlineVal = document.getElementById('convocReplyDeadline').value;
+  // On ne remplace jamais une valeur déjà enregistrée par un champ vide : ça évite de perdre
+  // le lieu/la ville d'un événement existant quand on retape juste son nom sans repasser
+  // par le menu déroulant (le formulaire peut alors être vide alors que l'événement a déjà ces infos).
+  ev.lieu = lieuVal || ev.lieu || '';
+  ev.ville = villeVal || ev.ville || '';
+  ev.consignes = consignesVal || ev.consignes || '';
+  ev.deadline = deadlineVal || ev.deadline || '';
   ev.schedule = ui.convocSchedule.filter(r=>r.heureDebut || r.categorie);
 }
 function convocResponseLink(token){
@@ -3827,7 +3837,23 @@ function renderConvocTab(){
   ['convocEvent','convocDate','convocLieu','convocVille','convocConsignes','convocReplyDeadline'].forEach(id=>{
     document.getElementById(id).oninput = ()=>{ updateConvocLinks(); saveConvocDraft(); };
   });
-  document.getElementById('convocEvent').addEventListener('change', ()=> renderConvocTab());
+  document.getElementById('convocEvent').addEventListener('change', ()=>{
+    // Si le nom tapé correspond à un événement déjà existant, on récupère ses infos (lieu, ville,
+    // consignes, horaires) même si l'utilisateur n'est pas passé par le menu déroulant juste
+    // au-dessus — sinon le formulaire reste vide et écrase ensuite ces infos à l'enregistrement.
+    const typedName = document.getElementById('convocEvent').value.trim();
+    const match = typedName ? data.convocEvents.find(e=> e.name.trim().toLowerCase()===typedName.toLowerCase()) : null;
+    if(match){
+      if(!document.getElementById('convocDate').value) document.getElementById('convocDate').value = match.date || '';
+      if(!document.getElementById('convocLieu').value.trim()) document.getElementById('convocLieu').value = match.lieu || '';
+      if(!document.getElementById('convocVille').value.trim()) document.getElementById('convocVille').value = match.ville || '';
+      if(!document.getElementById('convocConsignes').value.trim() && match.consignes !== undefined) document.getElementById('convocConsignes').value = match.consignes;
+      if(!document.getElementById('convocReplyDeadline').value) document.getElementById('convocReplyDeadline').value = match.deadline || '';
+      if((!ui.convocSchedule || ui.convocSchedule.length===0) && match.schedule && match.schedule.length) ui.convocSchedule = JSON.parse(JSON.stringify(match.schedule));
+      saveConvocDraft();
+    }
+    renderConvocTab();
+  });
   document.getElementById('resetConvocBtn').onclick = resetConvocForm;
   updateConvocLinks();
   renderConvocCurrent(); renderConvocArchive();
@@ -4598,6 +4624,7 @@ function renderResultsTab(){
   if(ui.resultsSelectedMemberId) renderPalmares();
 
   document.getElementById('downloadEventPdfBtn').onclick = generateEventResultsPdf;
+  document.getElementById('shareSocialVisualBtn').onclick = ()=> generateSocialMediaVisual(ui.resultsEventId);
   document.getElementById('downloadPalmaresPdfBtn').onclick = generateMemberPalmaresPdf;
   document.getElementById('generateRecapPdfBtn').onclick = generateMonthlyRecapPdf;
   document.getElementById('generateAnnualRecapBtn').onclick = generateAnnualRecapPdf;
@@ -6079,6 +6106,139 @@ function sortedCategoryLabels(labels){
 
 async function generateEventResultsPdf(){
   await generateEventResultsPdfForId(ui.resultsEventId);
+}
+
+// ---------------- Visuel réseaux sociaux (résultats d'un événement) ----------------
+// Prénom + initiale du nom de famille (ex: "Léa D.") pour un affichage compact sur le visuel.
+function shortMemberName(name){
+  const parts = String(name||'').trim().split(/\s+/);
+  if(parts.length<=1) return escapeHtml(parts[0]||'');
+  const prenom = parts[0];
+  const initiale = parts[1] ? parts[1].charAt(0).toUpperCase() : '';
+  return `${escapeHtml(prenom)}${initiale ? ' '+initiale+'.' : ''}`;
+}
+
+function buildSocialMedalistsData(presents){
+  let gold=0, silver=0, bronze=0;
+  const podium = { '1':[], '2':[], '3':[] };
+  const nonClasses = [];
+  presents.forEach(r=>{
+    const result = String(r.result||'');
+    if(result==='1' || result==='2' || result==='3'){
+      if(result==='1') gold++;
+      else if(result==='2') silver++;
+      else bronze++;
+      podium[result].push(r.name);
+    } else {
+      // "Non classé(e)s" : tous les présents hors podium — on précise juste 4e/5e/7e le cas échéant,
+      // sans jamais écrire explicitement "NC" ou "ABS".
+      const suffix = (result==='4'||result==='5'||result==='7') ? ` (${result}e)` : '';
+      nonClasses.push({ name:r.name, result, suffix });
+    }
+  });
+  ['1','2','3'].forEach(k=> podium[k].sort((a,b)=> a.localeCompare(b, 'fr')));
+  nonClasses.sort((a,b)=>{
+    const ra = rankOrderIndex(a.result), rb = rankOrderIndex(b.result);
+    if(ra!==rb) return ra-rb;
+    return a.name.localeCompare(b.name, 'fr');
+  });
+  return { gold, silver, bronze, podium, nonClasses };
+}
+
+function buildSocialVisualHtml(ev, presents, birthDateOf, shiaiEvent){
+  const logoImg = document.querySelector('header.topbar .club-logo-light');
+  const logoSrc = logoImg ? logoImg.src : '';
+  // Logo affiché avec une seule dimension contrainte (hauteur) : ratio préservé nativement,
+  // sans dépendre de object-fit (mal supporté par html2canvas, cause de déformation). Pas de fond,
+  // pas de contour : le logo brut tel quel.
+  const logoHtml = logoSrc ? `<img src="${logoSrc}" style="height:70px; width:auto; display:block; margin:0 auto;">` : '';
+
+  let bodyHtml;
+  if(shiaiEvent){
+    bodyHtml = `
+      <div style="text-align:center; font-family:'Inter',sans-serif; font-size:22px; color:#D8E0C6; padding:30px 0;">
+        🥋 ${presents.length} participant${presents.length>1?'s':''} engagé${presents.length>1?'s':''}
+      </div>`;
+  } else {
+    const { gold, silver, bronze, podium, nonClasses } = buildSocialMedalistsData(presents);
+
+    const medalColumn = (emoji, count, names, color, bg)=> `
+      <div style="flex:1; background:${bg}; border:2px solid ${color}; border-radius:16px; padding:20px 14px; display:flex; flex-direction:column;">
+        <div style="text-align:center; margin-bottom:14px;">
+          <div style="font-size:36px; line-height:1;">${emoji}</div>
+          <div style="font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:32px; color:${color};">${count}</div>
+        </div>
+        ${names.length ? names.map(n=>`
+          <div style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:19px; color:#F3EFE5; text-align:center; padding:7px 4px; border-top:1px solid rgba(255,255,255,0.12);">${shortMemberName(n)}</div>
+        `).join('') : `<div style="text-align:center; font-family:'Inter',sans-serif; font-size:13px; color:rgba(243,239,229,0.4); padding:6px 0;">—</div>`}
+      </div>`;
+
+    const columnsHtml = `
+      <div style="display:flex; gap:14px; align-items:stretch; margin-bottom:30px;">
+        ${medalColumn('🥇', gold, podium['1'], '#F0C419', 'rgba(240,196,25,0.12)')}
+        ${medalColumn('🥈', silver, podium['2'], '#D7D9DB', 'rgba(215,217,219,0.12)')}
+        ${medalColumn('🥉', bronze, podium['3'], '#CD8B4A', 'rgba(205,139,74,0.14)')}
+      </div>`;
+
+    const nonClassesHtml = nonClasses.length ? `
+      <div style="background:rgba(255,255,255,0.05); border-radius:16px; padding:18px 22px;">
+        <div style="font-family:'Rajdhani',sans-serif; font-weight:800; font-size:16px; color:#9CAA6B; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:10px;">Non classé(e)s</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px 18px;">
+          ${nonClasses.map(n=>`<div style="font-family:'Inter',sans-serif; font-size:16px; color:#D8DED0;">${shortMemberName(n.name)}${n.suffix}</div>`).join('')}
+        </div>
+      </div>` : '';
+
+    bodyHtml = columnsHtml + nonClassesHtml;
+  }
+
+  const dateVillePills = `
+    <div style="display:flex; justify-content:center; gap:10px; margin-bottom:34px;">
+      ${ev.date ? `<div style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:18px; color:#F3EFE5; background:rgba(255,255,255,0.09); border-radius:999px; padding:8px 18px;">📅 ${escapeHtml(fmtDate(ev.date))}</div>` : ''}
+      ${ev.ville ? `<div style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:18px; color:#F3EFE5; background:rgba(255,255,255,0.09); border-radius:999px; padding:8px 18px;">📍 ${escapeHtml(ev.ville)}</div>` : ''}
+    </div>`;
+
+  return `
+    <div style="width:1080px; padding:64px 60px; background:linear-gradient(160deg, #2A323A 0%, #333D45 55%, #3D5230 100%); font-family:'Inter',sans-serif; box-sizing:border-box;">
+      <div style="text-align:center; margin-bottom:38px;">
+        ${logoHtml}
+        <div style="margin-top:18px; font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:27px; color:#F3EFE5; text-transform:uppercase; letter-spacing:0.14em;">${escapeHtml(data.clubName||'')}</div>
+        <div style="margin:10px auto 0; width:64px; height:3px; background:#9CAA6B; border-radius:2px;"></div>
+      </div>
+      <div style="text-align:center; font-family:'Big Shoulders Display', sans-serif; font-weight:800; font-size:50px; color:#F3EFE5; line-height:1.08; margin-bottom:14px;">${escapeHtml(ev.name)}</div>
+      ${dateVillePills}
+      ${bodyHtml}
+      <div style="margin-top:40px; text-align:center; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:17px; color:#B9CB92; letter-spacing:0.06em; text-transform:uppercase;">🥋 ${escapeHtml(data.clubName||'')}</div>
+    </div>`;
+}
+
+async function generateSocialMediaVisual(eventId){
+  if(typeof html2canvas === 'undefined'){
+    showToast('La génération n’a pas pu se charger — vérifie ta connexion');
+    return;
+  }
+  const ev = data.convocEvents.find(e=>e.id===eventId);
+  if(!ev){ showToast('Choisis d’abord un événement'); return; }
+  const presents = ev.recipients.filter(r=>r.response==='present');
+  if(presents.length===0){ showToast('Aucun participant présent pour cet événement'); return; }
+  const btn = document.getElementById('shareSocialVisualBtn');
+  if(btn) btn.disabled = true;
+  try{
+    const birthDateOf = r => { const m = data.members.find(x=>x.id===r.memberId); return m ? m.birthDate : null; };
+    const shiaiEvent = isShiaiEvent(ev.name);
+    const html = buildSocialVisualHtml(ev, presents, birthDateOf, shiaiEvent);
+    if(document.fonts && document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+    const canvas = await captureOffscreenSection(html, '', 1080);
+    const link = document.createElement('a');
+    const safeName = ev.name.replace(/[^\w-]+/g,'-');
+    link.download = `visuel-reseaux-${safeName}.png`;
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+    showToast('Visuel généré 📸');
+  } catch(err){
+    showToast('Échec de la génération : ' + (err.message||err));
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 async function generateEventResultsPdfForId(eventId){
   if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
