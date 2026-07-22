@@ -2551,7 +2551,6 @@ function restrictedCategoriesForCurrentEvent(){
   const filtered = available.filter(c=>allowed.includes(c));
   return filtered.length ? filtered : null;
 }
-}
 function categoryYearLabel(birthDate){
   const cat = computeCategory(birthDate);
   if(!cat) return '';
