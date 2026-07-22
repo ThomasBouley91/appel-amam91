@@ -2774,6 +2774,12 @@ function renderConvocTab(){
       if(detail) detail.style.display = 'block';
     } else {
       document.getElementById('convocEvent').value = '';
+      document.getElementById('convocDate').value = '';
+      document.getElementById('convocLieu').value = '';
+      document.getElementById('convocVille').value = '';
+      document.getElementById('convocConsignes').value = "NE PAS OUBLIER : Le PASSEPORT SPORTIF en règle OBLIGATOIRE avec au moins 2 timbres de licences (dont saison en cours) pour les benjamins et minimes.";
+      document.getElementById('convocReplyDeadline').value = '';
+      ui.convocSchedule = [];
     }
     saveConvocDraft();
     updateConvocLinks();
