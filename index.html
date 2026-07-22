@@ -762,8 +762,8 @@ function defaultAgeBands(){
 function autoSeasonStartYear(){
   const now = new Date();
   const y = now.getFullYear(), m = now.getMonth()+1; // 1-12
-  if(m>=6) return y;      // juin à décembre -> saison qui commence cette année (anticipation dès l'été)
-  return y-1;             // janvier à mai -> la saison en cours a commencé l'année précédente
+  if(m>=9) return y;      // septembre à décembre -> la saison a commencé cette année
+  return y-1;             // janvier à août -> la saison en cours a commencé l'année précédente
 }
 function ensureSettings(){
   data.settings ||= {};
