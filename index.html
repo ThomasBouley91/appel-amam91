@@ -2767,6 +2767,8 @@ function renderConvocTab(){
       document.getElementById('convocEvent').value = eventSel.value;
       const ev = data.convocEvents.find(e=>e.name===eventSel.value);
       if(ev && ev.date) document.getElementById('convocDate').value = ev.date;
+      const detail = document.getElementById('convoc-form-detail');
+      if(detail) detail.style.display = 'block';
     } else {
       document.getElementById('convocEvent').value = '';
     }
@@ -3112,12 +3114,6 @@ function initCalendarCompetitionPicker(){
   document.addEventListener('click', e=>{
     if(!input.contains(e.target) && !wrap.contains(e.target)) wrap.classList.remove('show');
   });
-  document.getElementById('addManualConvocBtn').addEventListener('click', ()=>{
-    const detail = document.getElementById('convoc-form-detail');
-    const isHidden = detail.style.display === 'none' || !detail.style.display;
-    detail.style.display = isHidden ? 'block' : 'none';
-    if(isHidden) document.getElementById('convocEvent').focus();
-  });
   const moreOptionsBtn = document.getElementById('convocMoreOptionsBtn');
   if(moreOptionsBtn){
     moreOptionsBtn.addEventListener('click', ()=>{
@@ -3128,6 +3124,21 @@ function initCalendarCompetitionPicker(){
       if(icon) icon.textContent = isHidden ? '▴' : '▾';
     });
   }
+  const toggleExistingBtn = document.getElementById('toggleExistingCompetitionBtn');
+  if(toggleExistingBtn){
+    toggleExistingBtn.addEventListener('click', ()=>{
+      saveExistingCompetitionHidden(!loadExistingCompetitionHidden());
+      applyConvocSectionsVisibility();
+    });
+  }
+  const toggleNewFormBtn = document.getElementById('toggleNewConvocFormBtn');
+  if(toggleNewFormBtn){
+    toggleNewFormBtn.addEventListener('click', ()=>{
+      saveNewConvocFormHidden(!loadNewConvocFormHidden());
+      applyConvocSectionsVisibility();
+    });
+  }
+  applyConvocSectionsVisibility();
 }
 const QUALIFICATION_COMPETITIONS = {
   'Benjamins': [
