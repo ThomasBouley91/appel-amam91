@@ -2527,6 +2527,31 @@ function memberMatchesGroupedCategory(member, groupLabel){
   if(groupLabel==='Vétérans') return !!veteranLabelForMember(member);
   return groupedCategoryLabel(member.birthDate) === groupLabel;
 }
+function allowedCategoriesForCompetitionName(eventName){
+  const matchedLabel = matchConfiguredBandLabel(eventName);
+  if(!matchedLabel) return null;
+  const bands = data.settings.ageBands||[];
+  const allowed = [matchedLabel];
+  const matchedLower = matchedLabel.toLowerCase();
+  if(matchedLower.includes('junior')){
+    const cadetBand = bands.find(b=>b.label.toLowerCase().includes('cadet'));
+    if(cadetBand && !allowed.includes(cadetBand.label)) allowed.push(cadetBand.label);
+  } else if(matchedLower.includes('senior')){
+    const juniorBand = bands.find(b=>b.label.toLowerCase().includes('junior'));
+    if(juniorBand && !allowed.includes(juniorBand.label)) allowed.push(juniorBand.label);
+  }
+  return allowed;
+}
+function restrictedCategoriesForCurrentEvent(){
+  const eventInput = document.getElementById('convocEvent');
+  const eventName = eventInput ? eventInput.value : '';
+  const allowed = allowedCategoriesForCompetitionName(eventName);
+  if(!allowed) return null;
+  const available = groupedCategoriesAvailable();
+  const filtered = available.filter(c=>allowed.includes(c));
+  return filtered.length ? filtered : null;
+}
+}
 function categoryYearLabel(birthDate){
   const cat = computeCategory(birthDate);
   if(!cat) return '';
