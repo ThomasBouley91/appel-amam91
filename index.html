@@ -932,7 +932,7 @@ function categoryYearLabelWithVeteran(birthDate, gender){
 }
 function categoryLabelForResultsPdf(birthDate, gender, viaVeterans, member){
   if(viaVeterans){
-    return `🎖️ Vétérans ${veteranLabelForMember(member) || ''}`.trim();
+    return `Vétérans ${veteranLabelForMember(member) || ''}`.trim();
   }
   const cat = computeCategory(birthDate);
   if(!cat) return '';
@@ -1583,7 +1583,6 @@ function renderBeltValidatedSection(){
           <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
             ${beltSwatchHtml(p.belt, true)}
             <span style="font-size:13px;">${escapeHtml(beltLabelFor(p.belt))}</span>
-            <button class="ghost icon-btn" data-action="remove-belt-validated" data-id="${p.id}" title="Retirer de l'historique" style="padding:5px 8px; font-size:11px;">✕</button>
           </div>
         </div>`).join('')}
       ` : ''}
@@ -1595,16 +1594,8 @@ function renderBeltValidatedSection(){
   if(groupSelect) groupSelect.addEventListener('change', ()=>{ ui.beltValidatedGroupFilter = groupSelect.value; renderBeltValidatedSection(); });
   const genValidatedBtn = document.getElementById('generateValidatedBeltDiplomasBtn');
   if(genValidatedBtn) genValidatedBtn.addEventListener('click', generateValidatedBeltDiplomasPdf);
-  wrap.querySelectorAll('[data-action="remove-belt-validated"]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if(!confirm('Retirer ce passage de l’historique ? (la ceinture obtenue reste sur la fiche de l’élève)')) return;
-      data.beltPassages = (data.beltPassages||[]).filter(p=>p.id!==btn.dataset.id);
-      saveData();
-      renderBeltValidatedSection();
-      renderBeltPassageSection();
-      showToast('Retiré de l’historique');
-    });
-  });
+  // Volontairement pas de bouton de suppression ici : une fois un passage validé et imprimé,
+  // il doit rester définitivement dans cette liste et ne jamais repasser dans « Passage de grade à passer ».
 }
 function buildValidatedBeltDiplomasPdfRows(list){
   const rows = [];
