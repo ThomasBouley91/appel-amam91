@@ -1034,7 +1034,23 @@ async function loadData(){
       const res = await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}`);
       const json = await res.json();
       if(json && !json.error){
+        // Le classeur distant peut avoir été mis en place avant l'ajout de champs plus récents
+        // (ex: passages de grade). S'il ne les renvoie pas, on garde la version locale de ces
+        // champs au lieu de les effacer silencieusement à chaque chargement.
+        let local = null;
+        try{ const raw = localStorage.getItem('dojo-data'); if(raw) local = JSON.parse(raw); }catch(e){}
         data = json;
+        if(local && typeof local === 'object'){
+          Object.keys(local).forEach(key=>{
+            if(data[key] === undefined) data[key] = local[key];
+          });
+          if(local.settings && typeof local.settings === 'object'){
+            data.settings = data.settings || {};
+            Object.keys(local.settings).forEach(key=>{
+              if(data.settings[key] === undefined) data.settings[key] = local.settings[key];
+            });
+          }
+        }
         data.groups ||= []; data.members ||= []; data.sessions ||= []; data.attendance ||= {};
         loadedFromBackend = true;
       } else {
