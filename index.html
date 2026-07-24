@@ -2471,6 +2471,7 @@ function importWorkbookMultiSheet(wb){
   let groupsCreated = 0, totalAdded = 0, totalUpdated = 0, totalSkipped = 0, sheetsIgnored = 0, beltsMatched = 0, beltsUnmatched = 0, totalReactivated = 0;
   const missingCandidates = []; // élèves actifs présents dans un cours traité par ce fichier, mais absents de ce fichier
   const missingInfoCandidates = []; // élèves traités par cet import (ajoutés ou déjà présents) avec au moins un champ vide
+  const touchedGroupIds = new Set(); // cours pour lesquels un onglet correspondant a été trouvé dans ce fichier
   wb.SheetNames.forEach(sheetName=>{
     const sheet = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:true, defval:'' });
@@ -2497,6 +2498,7 @@ function importWorkbookMultiSheet(wb){
       data.groups.push(group);
       groupsCreated++;
     }
+    touchedGroupIds.add(group.id);
     // On matche sur TOUS les membres du cours (actifs ET archivés) : si un nom déjà archivé
     // réapparaît dans un nouvel import, on le réactive au lieu de créer un doublon.
     const existingByName = new Map(data.members.filter(m=>m.groupId===group.id).map(m=>[m.name.toLowerCase(), m]));
@@ -2551,8 +2553,20 @@ function importWorkbookMultiSheet(wb){
       missingCandidates.push({ memberId: m.id, name: m.name, groupName: group.name });
     });
   });
+
+  // Cours existants mais qui n'ont aucun onglet correspondant dans ce fichier du tout : proposés à
+  // l'archivage de leurs élèves ET à la suppression du cours lui-même (contrairement au cas
+  // ci-dessus, où seul le cours est réellement traité mais certains élèves en sont absents).
+  const missingCourseCandidates = [];
+  data.groups.forEach(g=>{
+    if(touchedGroupIds.has(g.id)) return;
+    const activeMemberIds = data.members.filter(m=>m.groupId===g.id && !m.archived).map(m=>m.id);
+    if(activeMemberIds.length===0) return;
+    missingCourseCandidates.push({ groupId: g.id, groupName: g.name, memberIds: activeMemberIds });
+  });
+
   saveData(); renderAll();
-  if(groupsCreated===0 && totalAdded===0 && totalUpdated===0 && totalReactivated===0){
+  if(groupsCreated===0 && totalAdded===0 && totalUpdated===0 && totalReactivated===0 && missingCandidates.length===0 && missingCourseCandidates.length===0){
     showToast(sheetsIgnored ? "Aucune colonne NOM/PRENOM détectée dans ce fichier" : 'Aucune donnée trouvée');
     return;
   }
@@ -2564,55 +2578,88 @@ function importWorkbookMultiSheet(wb){
   if(beltsUnmatched) msg += `, ${beltsUnmatched} ceinture${beltsUnmatched===1?'':'s'} non reconnue${beltsUnmatched===1?'':'s'}`;
   showToast(msg);
   // On enchaîne les deux fenêtres de suivi d'import l'une après l'autre (jamais en même temps) :
-  // d'abord les fiches incomplètes à compléter, puis, une fois celle-ci fermée, les élèves
-  // absents du fichier à archiver éventuellement.
+  // d'abord les fiches incomplètes à compléter, puis, une fois celle-ci fermée, les élèves (et
+  // cours entiers) absents du fichier à archiver/supprimer éventuellement.
   if(missingInfoCandidates.length){
     openImportMissingInfoOverlay(missingInfoCandidates, ()=>{
-      if(missingCandidates.length) openImportArchivePreview(missingCandidates);
+      if(missingCandidates.length || missingCourseCandidates.length) openImportArchivePreview(missingCandidates, missingCourseCandidates);
     });
-  } else if(missingCandidates.length){
-    openImportArchivePreview(missingCandidates);
+  } else if(missingCandidates.length || missingCourseCandidates.length){
+    openImportArchivePreview(missingCandidates, missingCourseCandidates);
   }
 }
 
 // Aperçu avant validation : montre les élèves absents du fichier importé et laisse le coach
-// décocher ceux qu'il veut garder actifs avant d'appliquer l'archivage.
-function openImportArchivePreview(candidates){
+// décocher ceux qu'il veut garder actifs avant d'appliquer l'archivage. courseCandidates (optionnel)
+// liste des cours entiers absents du fichier (aucun onglet correspondant) : une case cochée
+// archive TOUS les élèves actifs de ce cours et supprime le cours lui-même.
+function openImportArchivePreview(candidates, courseCandidates){
+  courseCandidates = courseCandidates || [];
   const overlay = document.getElementById('import-archive-overlay');
   const sorted = [...candidates].sort((a,b)=> a.groupName.localeCompare(b.groupName,'fr') || memberSurname(a.name).localeCompare(memberSurname(b.name),'fr'));
-  const rows = sorted.map(c=>`
+  const sortedCourses = [...courseCandidates].sort((a,b)=> a.groupName.localeCompare(b.groupName,'fr'));
+
+  const courseRows = sortedCourses.map(c=>`
+    <label class="iao-row" style="background:rgba(179,73,47,0.08);">
+      <input type="checkbox" data-kind="course" data-id="${c.groupId}" checked>
+      <span>
+        <div class="iao-name">« ${escapeHtml(c.groupName)} » — cours entier absent du fichier</div>
+        <div class="iao-group">${c.memberIds.length} élève${c.memberIds.length===1?'':'s'} — le cours sera aussi supprimé</div>
+      </span>
+    </label>`).join('');
+  const memberRows = sorted.map(c=>`
     <label class="iao-row">
-      <input type="checkbox" data-id="${c.memberId}" checked>
+      <input type="checkbox" data-kind="member" data-id="${c.memberId}" checked>
       <span>
         <div class="iao-name">${escapeHtml(c.name)}</div>
         <div class="iao-group">${escapeHtml(c.groupName)}</div>
       </span>
     </label>`).join('');
+
+  const totalCourseMembers = sortedCourses.reduce((sum,c)=>sum+c.memberIds.length, 0);
   overlay.innerHTML = `
     <div class="iao-card">
-      <h2 style="margin-top:0;">Élèves absents du fichier importé</h2>
+      <h2 style="margin-top:0;">Éléments absents du fichier importé</h2>
       <p style="font-size:13px; color:var(--ink-dim); line-height:1.5;">
-        ${sorted.length} élève${sorted.length===1?'':'s'} ${sorted.length===1?'était':'étaient'} dans ${sorted.length===1?'son':'leurs'} cours mais ${sorted.length===1?'n\'apparaît':'n\'apparaissent'} plus dans le fichier importé.
-        Décoche ceux à garder actifs : les autres seront archivés (masqués des listes actives, mais leur historique reste conservé).
+        ${sortedCourses.length ? `${sortedCourses.length} cours (${totalCourseMembers} élève${totalCourseMembers===1?'':'s'}) n'${sortedCourses.length===1?'a':'ont'} aucun onglet correspondant dans ce fichier — ${sortedCourses.length===1?'il sera':'ils seront'} supprimé${sortedCourses.length===1?'':'s'} avec ses/leurs élèves archivés. ` : ''}
+        ${sorted.length ? `${sorted.length} élève${sorted.length===1?'':'s'} ${sorted.length===1?'était':'étaient'} dans ${sorted.length===1?'son':'leurs'} cours mais ${sorted.length===1?'n\'apparaît':'n\'apparaissent'} plus dans le fichier importé. ` : ''}
+        Décoche ce que tu veux garder actif : le reste sera archivé (masqué des listes actives, mais l'historique reste conservé).
       </p>
-      <div class="iao-list">${rows}</div>
-      <button class="primary" id="confirmArchiveBtn" style="width:100%;">Archiver la sélection</button>
+      <div class="iao-list">${courseRows}${memberRows}</div>
+      <button class="primary" id="confirmArchiveBtn" style="width:100%;">Archiver / supprimer la sélection</button>
       <button class="ghost" id="cancelArchiveBtn" style="width:100%; margin-top:8px;">Ne rien archiver</button>
     </div>`;
   overlay.classList.add('show');
   const close = ()=>{ overlay.classList.remove('show'); overlay.innerHTML=''; };
   document.getElementById('cancelArchiveBtn').onclick = ()=>{ close(); };
   document.getElementById('confirmArchiveBtn').onclick = ()=>{
-    const checkedIds = new Set([...overlay.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id));
-    let archivedCount = 0;
+    const checkedMemberIds = new Set([...overlay.querySelectorAll('input[data-kind="member"]:checked')].map(cb=>cb.dataset.id));
+    const checkedCourseIds = new Set([...overlay.querySelectorAll('input[data-kind="course"]:checked')].map(cb=>cb.dataset.id));
+    let archivedCount = 0, coursesDeletedCount = 0;
+
     candidates.forEach(c=>{
-      if(!checkedIds.has(c.memberId)) return;
+      if(!checkedMemberIds.has(c.memberId)) return;
       const m = data.members.find(x=>x.id===c.memberId);
       if(m && !m.archived){ m.archived = true; archivedCount++; }
     });
+
+    courseCandidates.forEach(c=>{
+      if(!checkedCourseIds.has(c.groupId)) return;
+      c.memberIds.forEach(mid=>{
+        const m = data.members.find(x=>x.id===mid);
+        if(m && !m.archived){ m.archived = true; archivedCount++; }
+      });
+      markDeleted('groups', c.groupId);
+      data.groups = data.groups.filter(g=>g.id!==c.groupId);
+      coursesDeletedCount++;
+    });
+
     saveData(); renderAll();
     close();
-    showToast(archivedCount ? `${archivedCount} élève${archivedCount===1?'':'s'} archivé${archivedCount===1?'':'s'}` : 'Aucun élève archivé');
+    let msg = '';
+    if(archivedCount) msg += `${archivedCount} élève${archivedCount===1?'':'s'} archivé${archivedCount===1?'':'s'}`;
+    if(coursesDeletedCount) msg += (msg?', ':'') + `${coursesDeletedCount} cours supprimé${coursesDeletedCount===1?'':'s'}`;
+    showToast(msg || 'Aucune modification');
   };
 }
 
@@ -7722,6 +7769,20 @@ footer.innerHTML = `<button id="resetBtn">Réinitialiser toutes les données</bu
 document.getElementById('tab-param').appendChild(footer);
 footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
   if(!confirm('Ceci efface DÉFINITIVEMENT tous les cours, pratiquants, séances, convocations, résultats, stages, archives de saison, événements de calendrier ajoutés manuellement et passages de grade. Les catégories d\'âge, réglages et coordonnées du club sont conservés. Continuer ?')) return;
+  // Il faut explicitement dire au classeur Google Sheets quels ids supprimer : la sauvegarde en
+  // ligne fusionne au lieu d'écraser (pour ne jamais perdre les données saisies en parallèle par
+  // un autre appareil), donc une remise à zéro purement locale ne serait jamais répercutée sur le
+  // classeur et tout reviendrait au prochain rechargement.
+  const wipedIds = {
+    groups: data.groups.map(g=>g.id),
+    members: data.members.map(m=>m.id),
+    sessions: data.sessions.map(s=>s.id),
+    beltPassages: (data.beltPassages||[]).map(p=>p.id),
+    calendarEvents: (data.calendarEvents||[]).map(c=>c.id),
+    convocEvents: (data.convocEvents||[]).map(ev=>ev.id),
+    archivedSeasons: (data.archivedSeasons||[]).map(a=>a.id),
+    stages: (data.stages||[]).map(s=>s.id)
+  };
   data = {
     clubName: data.clubName,
     clubContact: data.clubContact,
@@ -7734,6 +7795,7 @@ footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
     archivedSeasons: [],
     calendarEvents: [],
     beltPassages: [],
+    deletedIds: wipedIds,
     settings: {
       ageBands: data.settings.ageBands,
       seasonStartYear: data.settings.seasonStartYear,
