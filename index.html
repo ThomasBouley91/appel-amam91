@@ -394,6 +394,17 @@
   #import-missing-overlay .imo-fields input, #import-missing-overlay .imo-fields select{
     padding:8px 9px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-family:'Inter',sans-serif; font-size:13.5px;
   }
+  #quick-add-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:120; padding:16px; overflow:auto; }
+  #quick-add-overlay.show{ display:flex; align-items:flex-start; justify-content:center; }
+  #quick-add-overlay .qam-card{ background:var(--surface); border-radius:14px; padding:20px; max-width:560px; width:100%; margin-top:6vh; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  #quick-add-overlay .qam-fields{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:14px 0; }
+  #quick-add-overlay .qam-fields label{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--ink-dim); }
+  #quick-add-overlay .qam-fields label.full{ grid-column:1 / -1; }
+  #quick-add-overlay .qam-fields input, #quick-add-overlay .qam-fields select{
+    padding:8px 9px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-family:'Inter',sans-serif; font-size:13.5px;
+  }
+  #quick-add-overlay .qam-warn{ font-size:12px; color:#E08A3C; margin:-6px 0 4px; }
+
   .convoc-print-page{
     display:flex; gap:14px; max-width:1000px; margin:0 auto 22px;
     background:#e2e2e2; padding:14px; border-radius:10px;
@@ -743,6 +754,7 @@
 <div id="convoc-print-overlay"></div>
 <div id="import-archive-overlay"></div>
 <div id="import-missing-overlay"></div>
+<div id="quick-add-overlay"></div>
 <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1277,6 +1289,8 @@ function renderGroupsTab(){
                 <div style="margin-top:8px;"><span class="field-label">Sexe</span><div>${m.gender ? (m.gender==='F'?'Fille':'Garçon') : '—'}</div></div>
                 <div style="margin-top:8px;"><span class="field-label">Ceinture</span><div style="display:flex; align-items:center; gap:8px;">${m.belt ? beltSwatchHtml(m.belt, true) : ''}<span>${m.belt ? escapeHtml(beltLabelFor(m.belt)) : 'Non renseignée'}</span></div></div>
                 <div style="margin-top:8px;"><span class="field-label">Email (pour convocations)</span><div>${m.email ? escapeHtml(m.email) : '—'}</div></div>
+                <div style="margin-top:8px;"><span class="field-label">Téléphone</span><div>${m.phone ? escapeHtml(m.phone) : '—'}</div></div>
+                <div style="margin-top:8px;"><span class="field-label">Adresse</span><div>${(m.address || m.postalCode || m.city) ? escapeHtml([m.address, [m.postalCode, m.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')) : '—'}</div></div>
                 <div style="margin-top:8px;"><span class="field-label">Cours</span><div>${curGroup ? escapeHtml(curGroup.name) : '—'}</div></div>
               </div>
               <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px; flex-wrap:wrap;">
@@ -1319,6 +1333,24 @@ function renderGroupsTab(){
             <input type="text" data-action="edit-email" data-id="${m.id}" value="${escapeHtml(m.email||'')}" placeholder="parent@exemple.fr">
           </div>
           <div>
+            <span class="field-label">Téléphone</span>
+            <input type="text" data-action="edit-phone" data-id="${m.id}" value="${escapeHtml(m.phone||'')}" placeholder="06 12 34 56 78">
+          </div>
+          <div class="row" style="width:100%; margin:0; gap:8px;">
+            <div class="fiche-field" style="flex:2;">
+              <span class="field-label">Adresse</span>
+              <input type="text" data-action="edit-address" data-id="${m.id}" value="${escapeHtml(m.address||'')}" placeholder="8 rue du Vieux Moulin">
+            </div>
+            <div class="fiche-field" style="flex:1;">
+              <span class="field-label">Code postal</span>
+              <input type="text" data-action="edit-postalcode" data-id="${m.id}" value="${escapeHtml(m.postalCode||'')}" placeholder="91540">
+            </div>
+            <div class="fiche-field" style="flex:1;">
+              <span class="field-label">Ville</span>
+              <input type="text" data-action="edit-city" data-id="${m.id}" value="${escapeHtml(m.city||'')}" placeholder="Mennecy">
+            </div>
+          </div>
+          <div>
             <span class="field-label">Cours</span>
             <select data-action="change-group" data-id="${m.id}">
               ${data.groups.map(g2=>`<option value="${g2.id}" ${g2.id===m.groupId?'selected':''}>${escapeHtml(g2.name)}</option>`).join('')}
@@ -1335,6 +1367,7 @@ function renderGroupsTab(){
         <input type="text" id="${draftId}" placeholder="Nom du pratiquant">
         <button data-action="add-member" data-id="${g.id}" data-input="${draftId}">Ajouter</button>
       </div>
+      <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="quick-add-member" data-id="${g.id}">📋 Ajout rapide (fiche complète)</button>
       <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="import" data-id="${g.id}">Importer une liste (Excel/CSV)</button>
       ` : ''}
     </div>`;
@@ -1385,6 +1418,8 @@ document.getElementById('groups-list').addEventListener('click', e=>{
     if(!name) return;
     data.members.push({ id: uid(), groupId: btn.dataset.id, name });
     saveData(); renderAll();
+  } else if(action==='quick-add-member'){
+    openQuickAddMemberOverlay(btn.dataset.id);
   } else if(action==='import'){
     ui.importMode = 'single';
     ui.importTargetGroup = btn.dataset.id;
@@ -1443,6 +1478,30 @@ document.getElementById('groups-list').addEventListener('change', e=>{
       renderGroupsTab();
       showToast(newGroup ? `Déplacé(e) vers « ${newGroup.name} »` : 'Cours mis à jour');
     }
+    return;
+  }
+  const phoneInput = e.target.closest('[data-action="edit-phone"]');
+  if(phoneInput){
+    const m = data.members.find(x=>x.id===phoneInput.dataset.id);
+    if(m){ m.phone = phoneInput.value.trim(); saveData(); }
+    return;
+  }
+  const addressInput = e.target.closest('[data-action="edit-address"]');
+  if(addressInput){
+    const m = data.members.find(x=>x.id===addressInput.dataset.id);
+    if(m){ m.address = addressInput.value.trim(); saveData(); }
+    return;
+  }
+  const postalInput = e.target.closest('[data-action="edit-postalcode"]');
+  if(postalInput){
+    const m = data.members.find(x=>x.id===postalInput.dataset.id);
+    if(m){ m.postalCode = postalInput.value.trim(); saveData(); }
+    return;
+  }
+  const cityInput = e.target.closest('[data-action="edit-city"]');
+  if(cityInput){
+    const m = data.members.find(x=>x.id===cityInput.dataset.id);
+    if(m){ m.city = cityInput.value.trim(); saveData(); }
     return;
   }
   const input = e.target.closest('[data-action="edit-email"]');
@@ -2877,6 +2936,102 @@ document.getElementById('importFileInput').addEventListener('change', async (e)=
     ui.importMode = null;
   }
 });
+
+/* ---------------- AJOUT RAPIDE (FICHE COMPLÈTE) ---------------- */
+function openQuickAddMemberOverlay(defaultGroupId){
+  const overlay = document.getElementById('quick-add-overlay');
+  const anyGroups = data.groups.length > 0;
+
+  overlay.innerHTML = `
+    <div class="qam-card">
+      <h2 style="margin-top:0;">Nouvelle fiche élève</h2>
+      <p style="font-size:13px; color:var(--ink-dim); line-height:1.5; margin:-6px 0 0;">
+        Renseigne les informations disponibles — seuls le nom (ou prénom) et le cours sont obligatoires, le reste peut être complété plus tard depuis la fiche.
+      </p>
+      <div class="qam-fields">
+        <label>Nom
+          <input data-field="nom" placeholder="Nom">
+        </label>
+        <label>Prénom
+          <input data-field="prenom" placeholder="Prénom">
+        </label>
+        <label>Date de naissance
+          <input type="date" data-field="birthDate">
+        </label>
+        <label>Sexe
+          <select data-field="gender">
+            <option value="">Non renseigné</option>
+            <option value="F">Fille</option>
+            <option value="M">Garçon</option>
+          </select>
+        </label>
+        <label>Email
+          <input type="email" data-field="email" placeholder="parent@exemple.fr">
+        </label>
+        <label>Téléphone
+          <input data-field="phone" placeholder="06 12 34 56 78">
+        </label>
+        <label>Ville
+          <input data-field="city" placeholder="Mennecy">
+        </label>
+        <label class="full">Adresse
+          <input data-field="address" placeholder="8 rue du Vieux Moulin">
+        </label>
+        <label>Code postal
+          <input data-field="postalCode" placeholder="91540">
+        </label>
+        <label>&nbsp;</label>
+        <label>Cours *
+          <select data-field="groupId">
+            <option value="">— À choisir —</option>
+            ${data.groups.map(g=>`<option value="${g.id}" ${g.id===defaultGroupId?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>Ceinture
+          <select data-field="belt">
+            <option value="">Non renseignée</option>
+            ${BELT_RANKS.map(r=>`<option value="${r.key}">${escapeHtml(r.label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      ${anyGroups ? '' : '<p class="qam-warn">Créez d\'abord un cours dans l\'onglet « Cours » avant de pouvoir enregistrer cette fiche.</p>'}
+      <button class="primary" id="confirmQuickAddBtn" style="width:100%;">Créer la fiche élève</button>
+      <button class="ghost" id="cancelQuickAddBtn" style="width:100%; margin-top:8px;">Annuler</button>
+    </div>`;
+  overlay.classList.add('show');
+
+  const close = ()=>{ overlay.classList.remove('show'); overlay.innerHTML=''; };
+  document.getElementById('cancelQuickAddBtn').onclick = close;
+  document.getElementById('confirmQuickAddBtn').onclick = ()=>{
+    const val = field => overlay.querySelector(`[data-field="${field}"]`).value.trim();
+    const groupId = val('groupId');
+    if(!groupId){
+      showToast('Choisis un cours avant de créer la fiche');
+      return;
+    }
+    const prenom = val('prenom');
+    const nom = val('nom');
+    const name = `${prenom} ${nom}`.trim();
+    if(!name){
+      showToast('Nom ou prénom manquant');
+      return;
+    }
+    const member = { id: uid(), groupId, name };
+    const bd = val('birthDate'); if(bd) member.birthDate = bd;
+    const gender = val('gender'); if(gender) member.gender = gender;
+    const email = val('email'); if(email) member.email = email;
+    const phone = val('phone'); if(phone) member.phone = phone;
+    const address = val('address'); if(address) member.address = address;
+    const postalCode = val('postalCode'); if(postalCode) member.postalCode = postalCode;
+    const city = val('city'); if(city) member.city = city;
+    const belt = val('belt'); if(belt){ member.belt = belt; member.beltHistory = [{ belt, date: todayStr() }]; }
+
+    data.members.push(member);
+    saveData(); renderAll();
+    showToast(`Fiche créée pour ${name}`);
+    close();
+  };
+}
 
 /* ---------------- PRÉSENCES ---------------- */
 function renderPresencesTab(){
@@ -7939,6 +8094,10 @@ function goToMemberFiche(memberId, groupId){
   }, 60);
 }
 
+loadData();
+</script>
+</body>
+</html>
 loadData();
 </script>
 </body>
