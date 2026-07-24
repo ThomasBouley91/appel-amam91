@@ -301,7 +301,11 @@
   .pdfcal-event.type-stage .pce-day{ color:#B3492F; }
   .pdfcal-event .pce-name{ font-size:9.5px; font-weight:700; line-height:1.25; margin-top:1px; color:#1A1A1A; }
   .pdfcal-event .pce-city{ font-size:8.5px; color:#888; margin-top:1px; }
-  .pdfcal-event .pce-cat{ font-size:7.5px; color:#999; margin-top:2px; font-style:italic; }
+  .pdfcal-event .pce-cat{ font-size:7.5px; color:#999; margin-top:2px; font-style:italic; display:flex; align-items:center; flex-wrap:wrap; gap:3px; }
+  .cat-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .pdfcal-legend{ display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
+  .pdfcal-legend .item{ display:flex; align-items:center; gap:4px; font-size:8.5px; color:#555; }
+  .pdfcal-legend .item .cat-dot{ width:8px; height:8px; }
 
   .slot-row{ display:flex; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
   .slot-row:last-child{ border-bottom:none; }
@@ -3581,7 +3585,7 @@ function renderCompetitionsCalendarCard(){
   const genCatBtn = document.getElementById('generateCategoryCalendarBtn');
   if(genCatBtn) genCatBtn.addEventListener('click', ()=> generateCalendarPdf(ui.calendarCategoryFilter));
 }
-const CALENDAR_PDF_COLS_PER_PAGE = 6;
+const CALENDAR_PDF_COLS_PER_PAGE = 4;
 function chunkArray(arr, size){
   const out = [];
   for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
@@ -3600,7 +3604,8 @@ function monthsRangeFromEntries(entries){
   }
   return months;
 }
-function buildCalendarGridHtml(monthBlocks, logoSrc, title){
+function buildCalendarGridHtml(monthBlocks, logoSrc, title, showLegend){
+  const legend = showLegend ? categoryLegendListForPdf() : [];
   return `
     <div class="recap-header">
       ${logoSrc ? `<img src="${logoSrc}" alt="Logo">` : ''}
@@ -3609,6 +3614,7 @@ function buildCalendarGridHtml(monthBlocks, logoSrc, title){
         <div class="rh-sub">${escapeHtml(title)}</div>
       </div>
     </div>
+    ${legend.length ? `<div class="pdfcal-legend">${legend.map(l=>`<div class="item"><span class="cat-dot" style="background:${l.color}"></span>${escapeHtml(l.label)}</div>`).join('')}</div>` : ''}
     <div class="pdfcal-grid">
       ${monthBlocks.map(mb=>`
         <div class="pdfcal-col">
@@ -3616,15 +3622,21 @@ function buildCalendarGridHtml(monthBlocks, logoSrc, title){
           <div class="pdfcal-col-body">
             ${mb.entries.length===0 ? '<div class="pdfcal-col-empty">—</div>' : mb.entries.map(en=>{
               const d = new Date(en.date+'T00:00:00');
-              const hasCategory = en.ageCategories==='all' || (Array.isArray(en.ageCategories) && en.ageCategories.length);
+              const catList = en.ageCategories==='all' ? [] : (Array.isArray(en.ageCategories) ? en.ageCategories : []);
+              const hasCategory = en.ageCategories==='all' || catList.length>0;
               const catLabel = en.ageCategories==='all' ? 'Toutes cat.'
-                : (Array.isArray(en.ageCategories) && en.ageCategories.length ? en.ageCategories.join(', ') : 'Pas de catégorie');
+                : (catList.length ? catList.join(', ') : 'Pas de catégorie');
+              // Fond légèrement teinté selon la catégorie uniquement quand une seule catégorie précise
+              // s'applique (pour rester lisible et ne pas mélanger les couleurs si plusieurs catégories
+              // ou "toutes catégories" sont concernées).
+              const bgStyle = catList.length===1 ? ` style="background:${hexToRgba(categoryColorForLabel(catList[0]), 0.16)};"` : '';
+              const dotsHtml = catList.map(l=>`<span class="cat-dot" style="background:${categoryColorForLabel(l)}"></span>`).join('');
               return `
-              <div class="pdfcal-event type-${en.type}">
+              <div class="pdfcal-event type-${en.type}"${bgStyle}>
                 <div class="pce-day">${DAY_ABBR_FR[d.getDay()]} ${d.getDate()}</div>
                 <div class="pce-name">${en.type==='stage'?'🥋':'🏆'} ${escapeHtml(en.name)}</div>
                 ${en.city ? `<div class="pce-city">${escapeHtml(en.city)}</div>` : ''}
-                <div class="pce-cat"${hasCategory?'':' style="color:#B3492F; font-weight:700;"'}>${escapeHtml(catLabel)}</div>
+                <div class="pce-cat"${hasCategory?'':' style="color:#B3492F; font-weight:700;"'}>${dotsHtml}<span>${escapeHtml(catLabel)}</span></div>
               </div>`;
             }).join('')}
           </div>
@@ -3663,9 +3675,12 @@ async function generateCalendarPdf(categoryFilter){
     for(let i=0;i<chunks.length;i++){
       if(i>0) pdf.addPage();
       const pageTitle = baseTitle + (chunks.length>1 ? ` — page ${i+1}/${chunks.length}` : '');
-      const html = buildCalendarGridHtml(chunks[i], logoSrc, pageTitle);
+      // La légende des couleurs par catégorie n'a de sens que sur le calendrier général (qui
+      // mélange toutes les catégories) et seulement sur la première page.
+      const showLegend = categoryFilter==='all' && i===0;
+      const html = buildCalendarGridHtml(chunks[i], logoSrc, pageTitle, showLegend);
       const canvas = await captureOffscreenSection(html, 'recap-doc', 1000);
-      addCanvasSliced(pdf, canvas, margin);
+      addCanvasFitOrTop(pdf, canvas, margin);
     }
     const safeName = (categoryFilter==='all' ? 'general' : categoryFilter).replace(/[^\w-]+/g,'-');
     pdf.save(`calendrier-${safeName}.pdf`);
@@ -3930,6 +3945,35 @@ function bandYearRangeLabel(bandLabel){
   const minYear = seasonYear - b.maxAge;
   const maxYear = seasonYear - b.minAge;
   return minYear===maxYear ? `${bandLabel} (${minYear})` : `${bandLabel} (${minYear}-${maxYear})`;
+}
+
+/* ---------------- CODE COULEUR DES CATÉGORIES D'ÂGE (calendrier PDF) ---------------- */
+// Dégradé de bleus dérivé de la couleur du logo du club (#1858A0), du plus clair (catégories les
+// plus jeunes) au plus soutenu (Seniors), pour garder une identité visuelle cohérente plutôt que
+// des couleurs disparates par catégorie. Vétérans reçoit un bleu marine à part, pour rester bien
+// distinct des Seniors tout en restant dans la même famille de bleus.
+const CATEGORY_COLOR_PALETTE = ['#DCEAF7','#C3DDF2','#A9CFEC','#8FC1E6','#6BAEDE','#4A97D3','#2F7FC0','#1858A0'];
+const VETERAN_CATEGORY_COLOR = '#123F73';
+function categoryColorForLabel(label){
+  if(!label) return null;
+  if(label==='Vétérans') return VETERAN_CATEGORY_COLOR;
+  const bands = data.settings.ageBands||[];
+  const idx = bands.findIndex(b=>b.label===label);
+  if(idx===-1) return CATEGORY_COLOR_PALETTE[CATEGORY_COLOR_PALETTE.length-1];
+  // Répartit les bandes réellement configurées sur toute l'étendue de la palette (clair -> soutenu),
+  // même si le coach a ajouté/retiré des catégories par rapport aux 8 par défaut.
+  const ratio = bands.length<=1 ? 1 : idx/(bands.length-1);
+  const paletteIdx = Math.round(ratio*(CATEGORY_COLOR_PALETTE.length-1));
+  return CATEGORY_COLOR_PALETTE[paletteIdx];
+}
+function hexToRgba(hex, alpha){
+  const h = String(hex||'').replace('#','');
+  const r = parseInt(h.substring(0,2),16), g = parseInt(h.substring(2,4),16), b = parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function categoryLegendListForPdf(){
+  const bands = data.settings.ageBands||[];
+  return [...bands.map(b=>({ label:b.label, color:categoryColorForLabel(b.label) })), { label:'Vétérans', color:VETERAN_CATEGORY_COLOR }];
 }
 function renderRowsWithCategoryDividers(items, birthDateOf, rowRenderer){
   let html = '';
@@ -6370,6 +6414,30 @@ function addCanvasFitPage(pdf, canvas, margin){
   const y = (pageHeight-imgH)/2;
   const imgData = canvas.toDataURL('image/jpeg', 0.95);
   pdf.addImage(imgData, 'JPEG', x, y, imgW, imgH);
+}
+
+// Place un canvas à sa taille naturelle (pleine largeur, aligné en haut) quand son contenu tient
+// dans la hauteur de page disponible, ou le réduit (contain-fit) seulement si nécessaire pour
+// qu'il tienne quand même sur une seule page — contrairement à addCanvasSliced, on ne découpe
+// JAMAIS le contenu entre deux pages (ce qui coupait des cartes d'événement en deux sur le
+// calendrier PDF). Utilisé pour des grilles à hauteur variable comme le calendrier.
+function addCanvasFitOrTop(pdf, canvas, margin){
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const maxW = pageWidth - margin*2;
+  const maxH = pageHeight - margin*2;
+  const imgData = canvas.toDataURL('image/jpeg', 0.95);
+  const naturalImgHeight = canvas.height * maxW / canvas.width;
+  if(naturalImgHeight <= maxH){
+    pdf.addImage(imgData, 'JPEG', margin, margin, maxW, naturalImgHeight);
+  } else {
+    const scale = Math.min(maxW/canvas.width, maxH/canvas.height);
+    const imgW = canvas.width*scale;
+    const imgH = canvas.height*scale;
+    const x = (pageWidth-imgW)/2;
+    const y = (pageHeight-imgH)/2;
+    pdf.addImage(imgData, 'JPEG', x, y, imgW, imgH);
+  }
 }
 
 // Rend un tableau (contexte + en-tête + lignes) sur une ou plusieurs pages PDF, en garantissant
