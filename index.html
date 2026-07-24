@@ -405,6 +405,15 @@
   }
   #quick-add-overlay .qam-warn{ font-size:12px; color:#E08A3C; margin:-6px 0 4px; }
 
+  .archived-suggest{ display:none; position:absolute; left:0; right:0; top:100%; margin-top:4px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); z-index:30; max-height:260px; overflow:auto; }
+  .archived-suggest.show{ display:block; }
+  .archived-suggest-item{ padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:2px; }
+  .archived-suggest-item:last-child{ border-bottom:none; }
+  .archived-suggest-item:hover{ background:var(--surface-2); }
+  .archived-suggest-item strong{ font-size:13.5px; }
+  .archived-suggest-item span{ font-size:11.5px; color:var(--ink-dim); }
+  .archived-suggest-empty{ padding:9px 12px; font-size:12.5px; color:var(--ink-dim); }
+
   .convoc-print-page{
     display:flex; gap:14px; max-width:1000px; margin:0 auto 22px;
     background:#e2e2e2; padding:14px; border-radius:10px;
@@ -1363,11 +1372,12 @@ function renderGroupsTab(){
           })() : ''}
         </div>`;
       }).join('') || '<div class="empty" style="padding:10px 2px;">Aucun membre pour ce cours.</div>'}
-      <div class="row" style="margin-top:10px;">
-        <input type="text" id="${draftId}" placeholder="Nom du pratiquant">
-        <button data-action="add-member" data-id="${g.id}" data-input="${draftId}">Ajouter</button>
+      <div class="row" style="margin-top:10px; position:relative;">
+        <input type="text" id="${draftId}" placeholder="Élève archivé (nom)" autocomplete="off" data-action="archived-search-input" data-group="${g.id}">
+        <button data-action="archived-search-btn" data-id="${g.id}" data-input="${draftId}">Retrouver</button>
+        <div class="archived-suggest" id="suggest-${draftId}"></div>
       </div>
-      <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="quick-add-member" data-id="${g.id}">📋 Ajout rapide (fiche complète)</button>
+      <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="quick-add-member" data-id="${g.id}">📋 Ajout rapide (nouvel élève)</button>
       <button class="ghost icon-btn" style="margin-top:8px; width:100%;" data-action="import" data-id="${g.id}">Importer une liste (Excel/CSV)</button>
       ` : ''}
     </div>`;
@@ -1402,6 +1412,11 @@ document.getElementById('groups-list').addEventListener('click', e=>{
     renderGroupsTab();
     return;
   }
+  const suggestItem = e.target.closest('.archived-suggest-item');
+  if(suggestItem){
+    reactivateArchivedMember(suggestItem.dataset.member, suggestItem.dataset.group);
+    return;
+  }
   const btn = e.target.closest('button');
   if(!btn) return;
   const action = btn.dataset.action;
@@ -1412,12 +1427,18 @@ document.getElementById('groups-list').addEventListener('click', e=>{
     markDeleted('members', btn.dataset.id);
     data.members = data.members.filter(x=>x.id!==btn.dataset.id);
     saveData(); renderAll();
-  } else if(action==='add-member'){
+  } else if(action==='archived-search-btn'){
     const input = document.getElementById(btn.dataset.input);
-    const name = input.value.trim();
-    if(!name) return;
-    data.members.push({ id: uid(), groupId: btn.dataset.id, name });
-    saveData(); renderAll();
+    const query = input.value.trim();
+    if(!query) return;
+    const matches = findArchivedMatches(query);
+    if(matches.length===0){
+      showToast('Aucun élève archivé trouvé avec ce nom');
+    } else if(matches.length===1){
+      reactivateArchivedMember(matches[0].id, btn.dataset.id);
+    } else {
+      showToast(`${matches.length} correspondances — choisis dans la liste ci-dessous`);
+    }
   } else if(action==='quick-add-member'){
     openQuickAddMemberOverlay(btn.dataset.id);
   } else if(action==='import'){
@@ -1426,6 +1447,78 @@ document.getElementById('groups-list').addEventListener('click', e=>{
     document.getElementById('importFileInput').click();
   }
 });
+
+// Recherche parmi TOUS les élèves archivés (n'importe quel ancien cours), pas seulement
+// ceux du cours courant — un élève peut revenir dans un cours différent de celui qu'il
+// avait quitté.
+function findArchivedMatches(query){
+  const q = query.trim().toLowerCase();
+  if(!q) return [];
+  return data.members
+    .filter(m=>m.archived && m.name && m.name.toLowerCase().includes(q))
+    .sort((a,b)=>{
+      const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+      const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+      if(aStarts !== bStarts) return aStarts - bStarts;
+      return memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr');
+    })
+    .slice(0, 8);
+}
+
+function renderArchivedSuggestBox(inputEl){
+  const suggestBox = document.getElementById('suggest-' + inputEl.id);
+  if(!suggestBox) return;
+  const query = inputEl.value.trim();
+  if(query.length < 2){ suggestBox.innerHTML = ''; suggestBox.classList.remove('show'); return; }
+  const matches = findArchivedMatches(query);
+  const targetGroupId = inputEl.dataset.group;
+  if(matches.length===0){
+    suggestBox.innerHTML = '<div class="archived-suggest-empty">Aucun élève archivé trouvé</div>';
+  } else {
+    suggestBox.innerHTML = matches.map(m=>{
+      const grp = data.groups.find(g2=>g2.id===m.groupId);
+      const grpLabel = grp ? grp.name : 'ancien cours supprimé';
+      return `<div class="archived-suggest-item" data-member="${m.id}" data-group="${targetGroupId}">
+        <strong>${escapeHtml(m.name)}</strong>
+        <span>ancien cours : ${escapeHtml(grpLabel)}</span>
+      </div>`;
+    }).join('');
+  }
+  suggestBox.classList.add('show');
+}
+
+document.getElementById('groups-list').addEventListener('input', e=>{
+  const input = e.target.closest('[data-action="archived-search-input"]');
+  if(!input) return;
+  renderArchivedSuggestBox(input);
+});
+
+document.getElementById('groups-list').addEventListener('focusin', e=>{
+  const input = e.target.closest('[data-action="archived-search-input"]');
+  if(!input) return;
+  renderArchivedSuggestBox(input);
+});
+
+document.getElementById('groups-list').addEventListener('focusout', e=>{
+  const input = e.target.closest('[data-action="archived-search-input"]');
+  if(!input) return;
+  const suggestBox = document.getElementById('suggest-' + input.id);
+  // Petit délai pour laisser le temps au clic sur une suggestion de se déclencher avant fermeture.
+  setTimeout(()=>{ if(suggestBox) suggestBox.classList.remove('show'); }, 150);
+});
+
+// Réactive un élève archivé en le rattachant au cours indiqué : on modifie l'élève existant
+// (même id) au lieu d'en créer un nouveau, donc tout son historique (passages de grade,
+// résultats, stages, présences passées) reste automatiquement rattaché.
+function reactivateArchivedMember(memberId, newGroupId){
+  const m = data.members.find(x=>x.id===memberId);
+  const newGroup = data.groups.find(x=>x.id===newGroupId);
+  if(!m || !newGroup) return;
+  m.archived = false;
+  m.groupId = newGroupId;
+  saveData(); renderAll();
+  showToast(`${m.name} retrouvé(e) et rattaché(e) à « ${newGroup.name} » — historique conservé`);
+}
 
 document.getElementById('groups-list').addEventListener('change', e=>{
   const firstInput = e.target.closest('[data-action="edit-firstname"]');
@@ -3781,10 +3874,11 @@ function buildCalendarGridHtml(monthBlocks, logoSrc, title, showLegend){
               const hasCategory = en.ageCategories==='all' || catList.length>0;
               const catLabel = en.ageCategories==='all' ? 'Toutes cat.'
                 : (catList.length ? catList.join(', ') : 'Pas de catégorie');
-              // Fond légèrement teinté selon la catégorie uniquement quand une seule catégorie précise
-              // s'applique (pour rester lisible et ne pas mélanger les couleurs si plusieurs catégories
-              // ou "toutes catégories" sont concernées).
-              const bgStyle = catList.length===1 ? ` style="background:${hexToRgba(categoryColorForLabel(catList[0]), 0.16)};"` : '';
+              // Fond teinté selon la catégorie quand une seule catégorie précise s'applique ; fond gris
+              // neutre quand plusieurs catégories sont concernées à la fois (pour signaler "plusieurs
+              // catégories" sans mélanger leurs couleurs) ; pas de fond pour "toutes catégories".
+              const bgStyle = catList.length===1 ? ` style="background:${hexToRgba(categoryColorForLabel(catList[0]), 0.16)};"`
+                : catList.length>1 ? ` style="background:${hexToRgba(MULTI_CATEGORY_COLOR, 0.16)};"` : '';
               const dotsHtml = catList.map(l=>`<span class="cat-dot" style="background:${categoryColorForLabel(l)}"></span>`).join('');
               return `
               <div class="pdfcal-event type-${en.type}"${bgStyle}>
@@ -4104,22 +4198,26 @@ function bandYearRangeLabel(bandLabel){
 
 /* ---------------- CODE COULEUR DES CATÉGORIES D'ÂGE (calendrier PDF) ---------------- */
 // Dégradé de bleus dérivé de la couleur du logo du club (#1858A0), du plus clair (catégories les
-// plus jeunes) au plus soutenu (Seniors), pour garder une identité visuelle cohérente plutôt que
-// des couleurs disparates par catégorie. Vétérans reçoit un bleu marine à part, pour rester bien
-// distinct des Seniors tout en restant dans la même famille de bleus.
-const CATEGORY_COLOR_PALETTE = ['#DCEAF7','#C3DDF2','#A9CFEC','#8FC1E6','#6BAEDE','#4A97D3','#2F7FC0','#1858A0'];
-const VETERAN_CATEGORY_COLOR = '#123F73';
+// Une couleur bien distincte par catégorie (et non un dégradé d'une seule teinte) : avec un
+// dégradé de bleus, deux catégories voisines devenaient quasi impossibles à différencier une fois
+// éclaircies à 16% d'opacité sur le fond blanc du PDF. Chaque catégorie a maintenant sa propre
+// teinte (assignée par position, pas par interpolation), pour rester lisible même avec beaucoup
+// de catégories. Vétérans reçoit une teinte ardoise à part, volontairement hors de ce cycle.
+const CATEGORY_COLOR_PALETTE = ['#4A87C7','#E0913C','#6FA36B','#B3492F','#8B6BB0','#D4B23C','#4FA89A','#C9678F','#8C6239','#5C6B73'];
+const VETERAN_CATEGORY_COLOR = '#2E3440';
+// Fond gris neutre pour les événements concernant plusieurs catégories à la fois : signale "plusieurs
+// catégories" au premier coup d'œil sans faire se ressembler deux vraies catégories entre elles.
+const MULTI_CATEGORY_COLOR = '#8C9296';
 function categoryColorForLabel(label){
   if(!label) return null;
   if(label==='Vétérans') return VETERAN_CATEGORY_COLOR;
   const bands = data.settings.ageBands||[];
   const idx = bands.findIndex(b=>b.label===label);
   if(idx===-1) return CATEGORY_COLOR_PALETTE[CATEGORY_COLOR_PALETTE.length-1];
-  // Répartit les bandes réellement configurées sur toute l'étendue de la palette (clair -> soutenu),
-  // même si le coach a ajouté/retiré des catégories par rapport aux 8 par défaut.
-  const ratio = bands.length<=1 ? 1 : idx/(bands.length-1);
-  const paletteIdx = Math.round(ratio*(CATEGORY_COLOR_PALETTE.length-1));
-  return CATEGORY_COLOR_PALETTE[paletteIdx];
+  // Assignation directe par position dans la palette (avec repli cyclique si jamais il y a plus
+  // de catégories que de couleurs disponibles), pour que chaque catégorie garde une teinte propre
+  // et facilement reconnaissable plutôt qu'une nuance interpolée proche de ses voisines.
+  return CATEGORY_COLOR_PALETTE[idx % CATEGORY_COLOR_PALETTE.length];
 }
 function hexToRgba(hex, alpha){
   const h = String(hex||'').replace('#','');
@@ -8094,10 +8192,6 @@ function goToMemberFiche(memberId, groupId){
   }, 60);
 }
 
-loadData();
-</script>
-</body>
-</html>
 loadData();
 </script>
 </body>
