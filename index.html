@@ -1150,10 +1150,65 @@ async function loadData(){
   ready = true;
   document.getElementById('clubName').value = data.clubName || '';
   document.getElementById('clubContact').value = data.clubContact || '';
+  // Point de référence pour ne renvoyer, à la prochaine sauvegarde, que ce qui aura réellement
+  // changé sur cet appareil depuis ce chargement (voir captureSyncedSnapshot).
+  captureSyncedSnapshot();
   renderAll();
 }
 let saveInFlight = false;
 let savePendingAfter = false;
+
+// Protection générale contre l'écrasement de données par des sauvegardes concurrentes (plusieurs
+// appareils connectés au même classeur en ligne). Chaque sauvegarde envoyait TOUT le contenu local
+// (groupes, élèves, séances, résultats...) — y compris les entités que cet appareil n'a jamais
+// touchées, juste reçues telles quelles au dernier chargement. Si un autre appareil modifiait
+// entre-temps une de CES entités et sauvegardait avant nous, notre envoi (avec sa copie devenue
+// périmée) écrasait silencieusement sa modification en écrivant par-dessus.
+// Plutôt que de rajouter, entité par entité et champ par champ, des règles de fusion spécifiques
+// (fragile — un simple booléen qui peut basculer dans les deux sens, comme "élève archivé", ne
+// s'y prête pas), on ne renvoie désormais QUE ce qui a réellement changé localement depuis le
+// dernier chargement ou la dernière sauvegarde réussie : le serveur préserve déjà toute ligne
+// absente de l'envoi (c'est déjà comme ça que les suppressions concurrentes d'un autre appareil ne
+// sont jamais perdues), donc ne pas renvoyer une entité non modifiée revient à ne jamais risquer
+// d'écraser une modification faite entre-temps par quelqu'un d'autre — pour toutes les données.
+let syncedSnapshot = null;
+function cloneArr(arr){ return JSON.parse(JSON.stringify(arr||[])); }
+function cloneObj(obj){ return JSON.parse(JSON.stringify(obj||{})); }
+function captureSyncedSnapshot(){
+  syncedSnapshot = {
+    groups: cloneArr(data.groups),
+    members: cloneArr(data.members),
+    sessions: cloneArr(data.sessions),
+    stages: cloneArr(data.stages),
+    beltPassages: cloneArr(data.beltPassages),
+    calendarEvents: cloneArr(data.calendarEvents),
+    convocEvents: cloneArr(data.convocEvents),
+    archivedSeasons: cloneArr(data.archivedSeasons),
+    attendance: cloneObj(data.attendance)
+  };
+}
+// Ne garde que les éléments d'un tableau (identifiés par leur id) absents du dernier instantané
+// connu ou dont le contenu a changé depuis. Si on n'a encore aucun instantané (tout premier envoi,
+// avant tout chargement), on envoie tout — comportement identique à avant dans ce cas précis.
+function pickChangedById(currentArr, snapshotArr){
+  if(!syncedSnapshot) return currentArr || [];
+  const prevMap = new Map((snapshotArr||[]).map(x=>[x.id, x]));
+  return (currentArr||[]).filter(item=>{
+    const prev = prevMap.get(item.id);
+    return !prev || JSON.stringify(prev) !== JSON.stringify(item);
+  });
+}
+function pickChangedAttendance(currentAtt, snapshotAtt){
+  if(!syncedSnapshot) return currentAtt || {};
+  const out = {};
+  Object.keys(currentAtt||{}).forEach(sessionId=>{
+    const cur = currentAtt[sessionId] || {};
+    const prev = (snapshotAtt||{})[sessionId];
+    if(!prev || JSON.stringify(prev) !== JSON.stringify(cur)) out[sessionId] = cur;
+  });
+  return out;
+}
+
 async function saveData(){
   try{
     localStorage.setItem('dojo-data', JSON.stringify(data));
@@ -1168,16 +1223,32 @@ async function saveData(){
   }
   saveInFlight = true;
   try{
+    const snap = syncedSnapshot || {};
+    const payload = {
+      ...data,
+      groups: pickChangedById(data.groups, snap.groups),
+      members: pickChangedById(data.members, snap.members),
+      sessions: pickChangedById(data.sessions, snap.sessions),
+      stages: pickChangedById(data.stages, snap.stages),
+      beltPassages: pickChangedById(data.beltPassages, snap.beltPassages),
+      calendarEvents: pickChangedById(data.calendarEvents, snap.calendarEvents),
+      convocEvents: pickChangedById(data.convocEvents, snap.convocEvents),
+      archivedSeasons: pickChangedById(data.archivedSeasons, snap.archivedSeasons),
+      attendance: pickChangedAttendance(data.attendance, snap.attendance)
+    };
     await fetch(`${cfg.url}?key=${encodeURIComponent(cfg.key)}`, {
       method:'POST',
       headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
     // Les suppressions en attente viennent d'être envoyées et appliquées côté classeur : on vide
     // la liste pour ne pas la renvoyer indéfiniment. Si l'envoi échoue (catch ci-dessous), on la
     // garde pour réessayer à la prochaine sauvegarde.
     data.deletedIds = { groups:[], members:[], sessions:[], beltPassages:[], calendarEvents:[], convocEvents:[], archivedSeasons:[], stages:[] };
     try{ localStorage.setItem('dojo-data', JSON.stringify(data)); }catch(e){}
+    // Notre état local vient d'être envoyé avec succès : il devient la nouvelle référence connue
+    // pour savoir, à la prochaine sauvegarde, ce qui a (ou n'a pas) changé depuis.
+    captureSyncedSnapshot();
   }catch(e){
     showToast('Sauvegarde en ligne impossible — gardée en local seulement');
   } finally {
@@ -2529,6 +2600,7 @@ function renderBackendSettings(){
         body: JSON.stringify(data)
       });
       const json = await res.json();
+      if(json && json.ok) captureSyncedSnapshot();
       showToast(json && json.ok ? 'Données envoyées vers le classeur' : 'Le classeur a refusé l\u2019envoi — vérifie la clé');
     }catch(e){
       showToast('Impossible de contacter le classeur');
