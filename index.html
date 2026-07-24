@@ -698,6 +698,7 @@
       <p style="font-size:13px; color:var(--ink-dim); margin:0 0 12px; line-height:1.5;">Un fichier Excel avec plusieurs onglets (un onglet = un cours). Chaque onglet doit contenir des colonnes NOM, PRENOM et une colonne de date de naissance.</p>
       <button class="ghost" id="importWorkbookBtn" style="width:100%;">Choisir un fichier (.xlsx, .xls)</button>
     </div>
+    <div id="duplicate-groups-card"></div>
     <div class="card" id="age-settings"></div>
     <div class="card" id="imported-competitions-settings"></div>
     <div class="card" id="backend-settings"></div>
@@ -1173,6 +1174,7 @@ function renderAll(){
   if(!ready) return;
   renderHeaderSeasonLabel();
   renderGroupsTab();
+  renderDuplicateGroupsCard();
   renderBeltPassageSection();
   renderBeltDiplomasSection();
   renderBeltValidatedSection();
@@ -2659,6 +2661,116 @@ function openImportMissingInfoOverlay(candidates, onDone){
     showToast(count ? `${count} fiche${count===1?'':'s'} complétée${count===1?'':'s'}` : 'Aucune modification');
     close();
   };
+}
+
+// Détecte des cours en double (même nom, id différent). Ça peut arriver si un import Excel a
+// été relancé alors que l'appareil n'avait pas encore reçu la dernière version synchronisée du
+// classeur Google Sheets (ex: rechargement de page juste après un premier import, avant que
+// l'envoi vers le classeur soit terminé) — l'import recrée alors un nouveau cours du même nom
+// au lieu de retrouver l'existant.
+function findDuplicateGroupSets(){
+  const byName = new Map();
+  data.groups.forEach(g=>{
+    const key = g.name.trim().toLowerCase();
+    if(!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(g);
+  });
+  return [...byName.values()].filter(list=>list.length>1);
+}
+
+// Fusionne, au sein d'un même cours, les élèves qui ont exactement le même nom (typiquement
+// créés en double par le même souci de synchronisation). On garde la fiche la plus complète et on
+// reporte vers elle tout historique éventuellement rattaché au doublon (passages de grade, stages,
+// convocations, présences) avant de supprimer le doublon, pour ne jamais perdre de données.
+function mergeDuplicateMembersWithinGroups(){
+  let mergedCount = 0;
+  data.groups.forEach(g=>{
+    const membersInGroup = data.members.filter(m=>m.groupId===g.id);
+    const byName = new Map();
+    membersInGroup.forEach(m=>{
+      const key = m.name.trim().toLowerCase();
+      if(!byName.has(key)) byName.set(key, []);
+      byName.get(key).push(m);
+    });
+    byName.forEach(list=>{
+      if(list.length<=1) return;
+      const completeness = m => ['birthDate','email','gender','belt'].filter(f=>m[f]).length;
+      const sorted = [...list].sort((a,b)=> completeness(b)-completeness(a));
+      const canonical = sorted[0];
+      const dups = sorted.slice(1);
+      dups.forEach(dup=>{
+        (data.beltPassages||[]).forEach(p=>{ if(p.memberId===dup.id) p.memberId = canonical.id; });
+        (data.stages||[]).forEach(s=>{ (s.participants||[]).forEach(part=>{ if(part.memberId===dup.id) part.memberId = canonical.id; }); });
+        (data.convocEvents||[]).forEach(ev=>{ (ev.recipients||[]).forEach(r=>{ if(r.memberId===dup.id) r.memberId = canonical.id; }); });
+        Object.keys(data.attendance||{}).forEach(sessionId=>{
+          const att = data.attendance[sessionId];
+          if(att && att[dup.id]!==undefined){
+            if(att[canonical.id]===undefined) att[canonical.id] = att[dup.id];
+            delete att[dup.id];
+          }
+        });
+        ['birthDate','email','gender','belt'].forEach(f=>{ if(!canonical[f] && dup[f]) canonical[f] = dup[f]; });
+        data.members = data.members.filter(x=>x.id!==dup.id);
+        mergedCount++;
+      });
+    });
+  });
+  return mergedCount;
+}
+
+// Fusionne les cours en double détectés : les élèves (et séances déjà créées, s'il y en a) du/des
+// doublon(s) sont réassignés vers le cours "canonique" (celui qui a déjà une programmation, ou à
+// défaut le plus ancien), puis les doublons sont supprimés. Termine par une passe de fusion des
+// élèves en double au sein de chaque cours (voir mergeDuplicateMembersWithinGroups).
+function mergeDuplicateGroups(){
+  const sets = findDuplicateGroupSets();
+  if(sets.length===0){ showToast('Aucun cours en double détecté'); return; }
+  const details = sets.map(list=>`« ${list[0].name} » (${list.length} exemplaires)`).join(', ');
+  if(!confirm(`Fusionner les cours en double détectés : ${details} ?\n\nLes élèves seront regroupés dans un seul cours par nom (rien n'est supprimé côté élèves), puis les éventuels élèves en double au sein d'un même cours seront eux aussi fusionnés.`)) return;
+
+  let mergedGroupsCount = 0, movedMembersCount = 0;
+  sets.forEach(list=>{
+    const sorted = [...list].sort((a,b)=>{
+      const aHasRecurrence = (a.recurrence||[]).length>0;
+      const bHasRecurrence = (b.recurrence||[]).length>0;
+      if(aHasRecurrence !== bHasRecurrence) return aHasRecurrence ? -1 : 1;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    const canonical = sorted[0];
+    const duplicates = sorted.slice(1);
+    duplicates.forEach(dup=>{
+      data.members.forEach(m=>{ if(m.groupId===dup.id){ m.groupId = canonical.id; movedMembersCount++; } });
+      data.sessions.forEach(s=>{ if(s.groupId===dup.id) s.groupId = canonical.id; });
+      data.groups = data.groups.filter(x=>x.id!==dup.id);
+      mergedGroupsCount++;
+    });
+  });
+
+  const dedupedMembers = mergeDuplicateMembersWithinGroups();
+
+  saveData(); renderAll();
+  let msg = `${mergedGroupsCount} cours en double fusionné${mergedGroupsCount===1?'':'s'}, ${movedMembersCount} élève${movedMembersCount===1?'':'s'} regroupé${movedMembersCount===1?'':'s'}`;
+  if(dedupedMembers) msg += `, ${dedupedMembers} fiche${dedupedMembers===1?'':'s'} élève en double fusionnée${dedupedMembers===1?'':'s'}`;
+  showToast(msg);
+}
+
+function renderDuplicateGroupsCard(){
+  const wrap = document.getElementById('duplicate-groups-card');
+  if(!wrap) return;
+  const sets = findDuplicateGroupSets();
+  if(sets.length===0){ wrap.innerHTML = ''; return; }
+  const totalCount = sets.reduce((sum,list)=>sum+list.length, 0);
+  wrap.innerHTML = `
+    <div class="card" style="border:1px solid #E08A3C; background:rgba(224,138,60,0.08);">
+      <h2 style="margin-top:0;">⚠️ Cours en double détectés</h2>
+      <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">
+        ${totalCount} cours portent le même nom qu'un autre (souvent causé par un import relancé avant la fin d'une synchronisation) :
+        ${sets.map(list=>`« ${escapeHtml(list[0].name)} » (${list.length}×)`).join(', ')}.
+        La fusion regroupe les élèves dans un seul cours par nom, sans rien supprimer.
+      </p>
+      <button class="danger" id="mergeDuplicateGroupsBtn" style="width:100%;">Fusionner les cours et élèves en double</button>
+    </div>`;
+  document.getElementById('mergeDuplicateGroupsBtn').addEventListener('click', mergeDuplicateGroups);
 }
 
 document.getElementById('importFileInput').addEventListener('change', async (e)=>{
