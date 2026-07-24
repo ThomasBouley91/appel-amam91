@@ -366,6 +366,30 @@
   #convoc-print-overlay.show{ display:block; }
   #convoc-print-overlay .overlay-bar{ display:flex; gap:8px; max-width:1000px; margin:0 auto 16px; }
   #convoc-print-overlay .overlay-bar button{ flex:1; }
+
+  #import-archive-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:120; padding:16px; overflow:auto; }
+  #import-archive-overlay.show{ display:flex; align-items:flex-start; justify-content:center; }
+  #import-archive-overlay .iao-card{ background:var(--surface); border-radius:14px; padding:20px; max-width:520px; width:100%; margin-top:6vh; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  #import-archive-overlay .iao-list{ max-height:40vh; overflow:auto; margin:14px 0; border:1px solid var(--line); border-radius:10px; }
+  #import-archive-overlay .iao-row{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--line); }
+  #import-archive-overlay .iao-row:last-child{ border-bottom:none; }
+  #import-archive-overlay .iao-row input{ width:18px; height:18px; flex-shrink:0; }
+  #import-archive-overlay .iao-row .iao-name{ font-weight:600; }
+  #import-archive-overlay .iao-row .iao-group{ font-size:12px; color:var(--ink-dim); }
+
+  #import-missing-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:120; padding:16px; overflow:auto; }
+  #import-missing-overlay.show{ display:flex; align-items:flex-start; justify-content:center; }
+  #import-missing-overlay .imo-card{ background:var(--surface); border-radius:14px; padding:20px; max-width:560px; width:100%; margin-top:6vh; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  #import-missing-overlay .imo-list{ max-height:50vh; overflow:auto; margin:14px 0; }
+  #import-missing-overlay .imo-row{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; }
+  #import-missing-overlay .imo-row:last-child{ margin-bottom:0; }
+  #import-missing-overlay .imo-name{ font-weight:600; margin-bottom:8px; }
+  #import-missing-overlay .imo-group{ font-weight:400; font-size:12px; color:var(--ink-dim); }
+  #import-missing-overlay .imo-fields{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  #import-missing-overlay .imo-fields label{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--ink-dim); }
+  #import-missing-overlay .imo-fields input, #import-missing-overlay .imo-fields select{
+    padding:8px 9px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2); color:var(--ink); font-family:'Inter',sans-serif; font-size:13.5px;
+  }
   .convoc-print-page{
     display:flex; gap:14px; max-width:1000px; margin:0 auto 22px;
     background:#e2e2e2; padding:14px; border-radius:10px;
@@ -712,6 +736,8 @@
 <div class="toast" id="toast"></div>
 <div id="certificate-overlay"></div>
 <div id="convoc-print-overlay"></div>
+<div id="import-archive-overlay"></div>
+<div id="import-missing-overlay"></div>
 <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1178,7 +1204,7 @@ function renderGroupsTab(){
     return;
   }
   wrap.innerHTML = data.groups.map(g=>{
-    const members = data.members.filter(m=>m.groupId===g.id).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+    const members = data.members.filter(m=>m.groupId===g.id && !m.archived).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
     const draftId = 'draft-'+g.id;
     const expanded = !!ui.groupsExpanded[g.id];
     return `
@@ -1224,7 +1250,8 @@ function renderGroupsTab(){
                 <div style="margin-top:8px;"><span class="field-label">Email (pour convocations)</span><div>${m.email ? escapeHtml(m.email) : '—'}</div></div>
                 <div style="margin-top:8px;"><span class="field-label">Cours</span><div>${curGroup ? escapeHtml(curGroup.name) : '—'}</div></div>
               </div>
-              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+              <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px; flex-wrap:wrap;">
+                <button class="ghost icon-btn" data-action="member-history-pdf" data-id="${m.id}" title="Générer l'historique complet (résultats, passages de grade, stages) en PDF" style="padding:7px 10px;">📄 Historique PDF</button>
                 <button class="ghost icon-btn" data-action="edit-member-fiche" data-id="${m.id}" title="Modifier les informations" style="padding:7px 10px;">✏️</button>
                 <button class="ghost icon-btn" data-action="del-member" data-id="${m.id}" style="font-size:12px; padding:7px 10px;">Retirer</button>
               </div>`;
@@ -1316,7 +1343,9 @@ document.getElementById('groups-list').addEventListener('click', e=>{
   const btn = e.target.closest('button');
   if(!btn) return;
   const action = btn.dataset.action;
-  if(action==='del-member'){
+  if(action==='member-history-pdf'){
+    generateMemberPalmaresPdf(btn.dataset.id);
+  } else if(action==='del-member'){
     if(!confirm('Retirer ce pratiquant du cours ?')) return;
     data.members = data.members.filter(x=>x.id!==btn.dataset.id);
     saveData(); renderAll();
@@ -1406,6 +1435,27 @@ function memberHasPassageThisSeason(memberId){
   const seasonYear = data.settings.seasonStartYear || autoSeasonStartYear();
   return (data.beltPassages||[]).some(p=>p.memberId===memberId && inSchoolYear(p.date, seasonYear));
 }
+// Un élève archivé (parti du club) ne doit plus apparaître dans les listes actives (appel,
+// convocations, etc.), SAUF là où il a un historique réel à conserver (une présence déjà
+// enregistrée sur une séance passée, par exemple) — sinon cette donnée disparaîtrait des écrans
+// qui l'affichent, même si elle reste bien en mémoire.
+function memberHasAnyAttendanceIn(memberId, sessions){
+  return (sessions||[]).some(s => (data.attendance[s.id]||{})[memberId] !== undefined);
+}
+function isMemberVisibleInSessions(m, sessions){
+  return !m.archived || memberHasAnyAttendanceIn(m.id, sessions);
+}
+// Champs jugés utiles sur une fiche élève ; utilisé pour repérer les fiches incomplètes après
+// un import Excel (date de naissance et ceinture servent aux catégories/passages de grade,
+// email et genre aux convocations).
+function memberMissingFields(m){
+  const missing = [];
+  if(!m.birthDate) missing.push('birthDate');
+  if(!m.gender) missing.push('gender');
+  if(!m.belt) missing.push('belt');
+  if(!m.email) missing.push('email');
+  return missing;
+}
 function loadBeltPassageHidden(){
   try{ const v = localStorage.getItem('dojo-belt-passage-hidden'); return v===null ? true : v==='1'; }catch(e){ return true; }
 }
@@ -1417,7 +1467,7 @@ function renderBeltPassageSection(){
   if(!wrap) return;
   const hidden = loadBeltPassageHidden();
   if(!ui.beltPassageGroupFilter) ui.beltPassageGroupFilter = 'all';
-  const eligible = data.members.filter(m=> m.belt !== 'noire' && !memberHasPassageThisSeason(m.id))
+  const eligible = data.members.filter(m=> !m.archived && m.belt !== 'noire' && !memberHasPassageThisSeason(m.id))
     .filter(m=> ui.beltPassageGroupFilter==='all' || m.groupId===ui.beltPassageGroupFilter)
     .sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
 
@@ -2364,22 +2414,35 @@ function importSingleList(wb, groupId){
   let names = rows.map(rowToName).filter(Boolean);
   if(names.length && looksLikeHeader(names[0])) names = names.slice(1);
   if(names.length === 0){ showToast('Aucun nom trouvé dans ce fichier'); return; }
-  const existing = new Set(data.members.filter(m=>m.groupId===groupId).map(m=>m.name.toLowerCase()));
+  // On matche sur TOUS les membres du cours (actifs ET archivés) : si le nom collé correspond à
+  // un élève archivé, on le réactive plutôt que de l'ignorer comme un simple doublon.
+  const existingByName = new Map(data.members.filter(m=>m.groupId===groupId).map(m=>[m.name.toLowerCase(), m]));
   const seen = new Set();
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, reactivated = 0;
   names.forEach(name=>{
     const key = name.toLowerCase();
-    if(existing.has(key) || seen.has(key)){ skipped++; return; }
+    if(seen.has(key)){ skipped++; return; }
     seen.add(key);
+    const existingMember = existingByName.get(key);
+    if(existingMember){
+      if(existingMember.archived){ existingMember.archived = false; reactivated++; }
+      else skipped++;
+      return;
+    }
     data.members.push({ id: uid(), groupId, name });
     added++;
   });
   saveData(); renderAll();
-  showToast(`${added} ajouté${added===1?'':'s'}` + (skipped ? `, ${skipped} doublon${skipped===1?'':'s'} ignoré${skipped===1?'':'s'}` : ''));
+  let msg = `${added} ajouté${added===1?'':'s'}`;
+  if(reactivated) msg += `, ${reactivated} réactivé${reactivated===1?'':'s'}`;
+  if(skipped) msg += `, ${skipped} doublon${skipped===1?'':'s'} ignoré${skipped===1?'':'s'}`;
+  showToast(msg);
 }
 
 function importWorkbookMultiSheet(wb){
-  let groupsCreated = 0, totalAdded = 0, totalUpdated = 0, totalSkipped = 0, sheetsIgnored = 0, beltsMatched = 0, beltsUnmatched = 0;
+  let groupsCreated = 0, totalAdded = 0, totalUpdated = 0, totalSkipped = 0, sheetsIgnored = 0, beltsMatched = 0, beltsUnmatched = 0, totalReactivated = 0;
+  const missingCandidates = []; // élèves actifs présents dans un cours traité par ce fichier, mais absents de ce fichier
+  const missingInfoCandidates = []; // élèves traités par cet import (ajoutés ou déjà présents) avec au moins un champ vide
   wb.SheetNames.forEach(sheetName=>{
     const sheet = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(sheet, { header:1, raw:true, defval:'' });
@@ -2406,6 +2469,8 @@ function importWorkbookMultiSheet(wb){
       data.groups.push(group);
       groupsCreated++;
     }
+    // On matche sur TOUS les membres du cours (actifs ET archivés) : si un nom déjà archivé
+    // réapparaît dans un nouvel import, on le réactive au lieu de créer un doublon.
     const existingByName = new Map(data.members.filter(m=>m.groupId===group.id).map(m=>[m.name.toLowerCase(), m]));
     const seen = new Set();
     for(let i=headerIdx+1;i<rows.length;i++){
@@ -2427,11 +2492,16 @@ function importWorkbookMultiSheet(wb){
       if(existingMember){
         // pratiquant déjà présent : on complète/actualise plutôt que d'ignorer
         let updated = false;
+        let wasReactivated = false;
+        if(existingMember.archived){ existingMember.archived = false; totalReactivated++; wasReactivated = true; }
         if(!existingMember.birthDate && birthDate){ existingMember.birthDate = birthDate; updated = true; }
         if(!existingMember.email && mail){ existingMember.email = mail; updated = true; }
         if(!existingMember.gender && gender){ existingMember.gender = gender; updated = true; }
         if(belt && existingMember.belt !== belt){ existingMember.belt = belt; updated = true; } // la ceinture reflète toujours le dernier passage de grade importé
-        if(updated) totalUpdated++; else totalSkipped++;
+        if(updated) totalUpdated++; else if(!wasReactivated) totalSkipped++;
+        if(memberMissingFields(existingMember).length){
+          missingInfoCandidates.push({ memberId: existingMember.id, groupName: group.name });
+        }
         continue;
       }
 
@@ -2441,19 +2511,154 @@ function importWorkbookMultiSheet(wb){
       if(gender) member.gender = gender;
       data.members.push(member);
       totalAdded++;
+      if(memberMissingFields(member).length){
+        missingInfoCandidates.push({ memberId: member.id, groupName: group.name });
+      }
     }
+
+    // Élèves actuellement actifs dans ce cours mais absents de cet onglet : candidats à l'archivage.
+    // On ne compare que les cours réellement traités par ce fichier (onglet avec en-tête NOM/PRENOM
+    // détecté) — un cours qui n'a pas d'onglet dans ce fichier n'est pas concerné.
+    data.members.filter(m=>m.groupId===group.id && !m.archived && !seen.has(m.name.toLowerCase())).forEach(m=>{
+      missingCandidates.push({ memberId: m.id, name: m.name, groupName: group.name });
+    });
   });
   saveData(); renderAll();
-  if(groupsCreated===0 && totalAdded===0 && totalUpdated===0){
+  if(groupsCreated===0 && totalAdded===0 && totalUpdated===0 && totalReactivated===0){
     showToast(sheetsIgnored ? "Aucune colonne NOM/PRENOM détectée dans ce fichier" : 'Aucune donnée trouvée');
     return;
   }
   let msg = `${groupsCreated} cours créé${groupsCreated===1?'':'s'}, ${totalAdded} pratiquant${totalAdded===1?'':'s'} ajouté${totalAdded===1?'':'s'}`;
   if(totalUpdated) msg += `, ${totalUpdated} mis à jour`;
+  if(totalReactivated) msg += `, ${totalReactivated} réactivé${totalReactivated===1?'':'s'}`;
   if(totalSkipped) msg += `, ${totalSkipped} inchangé${totalSkipped===1?'':'s'}`;
   if(beltsMatched) msg += `, ${beltsMatched} ceinture${beltsMatched===1?'':'s'} reconnue${beltsMatched===1?'':'s'}`;
   if(beltsUnmatched) msg += `, ${beltsUnmatched} ceinture${beltsUnmatched===1?'':'s'} non reconnue${beltsUnmatched===1?'':'s'}`;
   showToast(msg);
+  // On enchaîne les deux fenêtres de suivi d'import l'une après l'autre (jamais en même temps) :
+  // d'abord les fiches incomplètes à compléter, puis, une fois celle-ci fermée, les élèves
+  // absents du fichier à archiver éventuellement.
+  if(missingInfoCandidates.length){
+    openImportMissingInfoOverlay(missingInfoCandidates, ()=>{
+      if(missingCandidates.length) openImportArchivePreview(missingCandidates);
+    });
+  } else if(missingCandidates.length){
+    openImportArchivePreview(missingCandidates);
+  }
+}
+
+// Aperçu avant validation : montre les élèves absents du fichier importé et laisse le coach
+// décocher ceux qu'il veut garder actifs avant d'appliquer l'archivage.
+function openImportArchivePreview(candidates){
+  const overlay = document.getElementById('import-archive-overlay');
+  const sorted = [...candidates].sort((a,b)=> a.groupName.localeCompare(b.groupName,'fr') || memberSurname(a.name).localeCompare(memberSurname(b.name),'fr'));
+  const rows = sorted.map(c=>`
+    <label class="iao-row">
+      <input type="checkbox" data-id="${c.memberId}" checked>
+      <span>
+        <div class="iao-name">${escapeHtml(c.name)}</div>
+        <div class="iao-group">${escapeHtml(c.groupName)}</div>
+      </span>
+    </label>`).join('');
+  overlay.innerHTML = `
+    <div class="iao-card">
+      <h2 style="margin-top:0;">Élèves absents du fichier importé</h2>
+      <p style="font-size:13px; color:var(--ink-dim); line-height:1.5;">
+        ${sorted.length} élève${sorted.length===1?'':'s'} ${sorted.length===1?'était':'étaient'} dans ${sorted.length===1?'son':'leurs'} cours mais ${sorted.length===1?'n\'apparaît':'n\'apparaissent'} plus dans le fichier importé.
+        Décoche ceux à garder actifs : les autres seront archivés (masqués des listes actives, mais leur historique reste conservé).
+      </p>
+      <div class="iao-list">${rows}</div>
+      <button class="primary" id="confirmArchiveBtn" style="width:100%;">Archiver la sélection</button>
+      <button class="ghost" id="cancelArchiveBtn" style="width:100%; margin-top:8px;">Ne rien archiver</button>
+    </div>`;
+  overlay.classList.add('show');
+  const close = ()=>{ overlay.classList.remove('show'); overlay.innerHTML=''; };
+  document.getElementById('cancelArchiveBtn').onclick = ()=>{ close(); };
+  document.getElementById('confirmArchiveBtn').onclick = ()=>{
+    const checkedIds = new Set([...overlay.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id));
+    let archivedCount = 0;
+    candidates.forEach(c=>{
+      if(!checkedIds.has(c.memberId)) return;
+      const m = data.members.find(x=>x.id===c.memberId);
+      if(m && !m.archived){ m.archived = true; archivedCount++; }
+    });
+    saveData(); renderAll();
+    close();
+    showToast(archivedCount ? `${archivedCount} élève${archivedCount===1?'':'s'} archivé${archivedCount===1?'':'s'}` : 'Aucun élève archivé');
+  };
+}
+
+// Alerte fiches incomplètes après import : champs libres pour la date de naissance/l'email/le
+// genre, liste déroulante pour la ceinture (BELT_RANKS). Un champ laissé vide n'efface jamais une
+// valeur déjà présente sur la fiche — il ne fait que compléter ce qui manque.
+function openImportMissingInfoOverlay(candidates, onDone){
+  const overlay = document.getElementById('import-missing-overlay');
+  const uniqueById = new Map();
+  candidates.forEach(c=>{ if(!uniqueById.has(c.memberId)) uniqueById.set(c.memberId, c.groupName); });
+  const sorted = [...uniqueById.entries()]
+    .map(([memberId, groupName])=> ({ memberId, groupName, member: data.members.find(x=>x.id===memberId) }))
+    .filter(x=>x.member)
+    .sort((a,b)=> a.groupName.localeCompare(b.groupName,'fr') || memberSurname(a.member.name).localeCompare(memberSurname(b.member.name),'fr'));
+
+  if(sorted.length === 0){ if(onDone) onDone(); return; }
+
+  const rows = sorted.map(({memberId, groupName, member:m})=>`
+    <div class="imo-row" data-id="${memberId}">
+      <div class="imo-name">${escapeHtml(m.name)} <span class="imo-group">— ${escapeHtml(groupName)}</span></div>
+      <div class="imo-fields">
+        <label>Date de naissance
+          <input type="date" data-field="birthDate" value="${m.birthDate||''}">
+        </label>
+        <label>Email
+          <input type="email" data-field="email" value="${escapeHtml(m.email||'')}" placeholder="email@exemple.fr">
+        </label>
+        <label>Genre
+          <select data-field="gender">
+            <option value="" ${!m.gender?'selected':''}>—</option>
+            <option value="F" ${m.gender==='F'?'selected':''}>Fille</option>
+            <option value="M" ${m.gender==='M'?'selected':''}>Garçon</option>
+          </select>
+        </label>
+        <label>Ceinture
+          <select data-field="belt">
+            <option value="" ${!m.belt?'selected':''}>—</option>
+            ${BELT_RANKS.map(b=>`<option value="${b.key}" ${m.belt===b.key?'selected':''}>${escapeHtml(b.label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+    </div>`).join('');
+
+  overlay.innerHTML = `
+    <div class="imo-card">
+      <h2 style="margin-top:0;">Fiches incomplètes</h2>
+      <p style="font-size:13px; color:var(--ink-dim); line-height:1.5;">
+        ${sorted.length} fiche${sorted.length===1?'':'s'} ${sorted.length===1?'a':'ont'} au moins une information manquante après cet import.
+        Complète ce qui manque directement ici, ou passe cette étape pour compléter plus tard depuis la fiche de l'élève.
+      </p>
+      <div class="imo-list">${rows}</div>
+      <button class="primary" id="saveMissingInfoBtn" style="width:100%;">Enregistrer</button>
+      <button class="ghost" id="skipMissingInfoBtn" style="width:100%; margin-top:8px;">Plus tard</button>
+    </div>`;
+  overlay.classList.add('show');
+  const close = ()=>{ overlay.classList.remove('show'); overlay.innerHTML=''; if(onDone) onDone(); };
+  document.getElementById('skipMissingInfoBtn').onclick = ()=>{ close(); };
+  document.getElementById('saveMissingInfoBtn').onclick = ()=>{
+    let count = 0;
+    overlay.querySelectorAll('.imo-row').forEach(row=>{
+      const m = data.members.find(x=>x.id===row.dataset.id);
+      if(!m) return;
+      let changed = false;
+      row.querySelectorAll('[data-field]').forEach(input=>{
+        const field = input.dataset.field;
+        const val = input.value.trim();
+        if(val && m[field] !== val){ m[field] = val; changed = true; }
+      });
+      if(changed) count++;
+    });
+    saveData(); renderAll();
+    showToast(count ? `${count} fiche${count===1?'':'s'} complétée${count===1?'':'s'}` : 'Aucune modification');
+    close();
+  };
 }
 
 document.getElementById('importFileInput').addEventListener('change', async (e)=>{
@@ -2538,7 +2743,7 @@ function renderPresenceSheet(){
   const sheet = document.getElementById('presence-sheet');
   const session = data.sessions.find(s=>s.id===ui.presenceSessionId);
   if(!session){ sheet.style.display='none'; return; }
-  const members = data.members.filter(m=>m.groupId===session.groupId).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+  const members = data.members.filter(m=>m.groupId===session.groupId && isMemberVisibleInSessions(m, [session])).sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
   const att = data.attendance[session.id] || (data.attendance[session.id]={});
   sheet.style.display='block';
   const present = members.filter(m=>isPresent(att[m.id])).length;
@@ -2611,7 +2816,7 @@ function renderPresenceHistory(){
   if(allSessions.length===0){ wrap.innerHTML = `<h2>Séances</h2><div class="empty">Aucune séance enregistrée pour ce cours.</div>`; return; }
 
   const pendingHtml = pending.map(s=>{
-    const members = data.members.filter(m=>m.groupId===s.groupId);
+    const members = data.members.filter(m=>m.groupId===s.groupId && isMemberVisibleInSessions(m, [s]));
     const att = data.attendance[s.id] || {};
     const present = members.filter(m=>isPresent(att[m.id])).length;
     return `
@@ -2719,7 +2924,7 @@ function renderSuiviContent(){
 
   wrap.innerHTML = groups.map(g=>{
     const sessions = data.sessions.filter(s=>s.groupId===g.id && inSchoolYear(s.date, startYear) && sessionHasRollCall(s.id));
-    const members = [...data.members.filter(m=>m.groupId===g.id)];
+    const members = [...data.members.filter(m=>m.groupId===g.id && isMemberVisibleInSessions(m, sessions))];
     const memberPct = m=>{
       const present = sessions.filter(s=> isPresent((data.attendance[s.id]||{})[m.id])).length;
       return sessions.length ? (present/sessions.length)*100 : 0;
@@ -2781,7 +2986,7 @@ async function generateCourseAttendancePdf(groupId){
   const startYear = parseInt(document.getElementById('suiviYear').value, 10);
   const sessions = data.sessions.filter(s=>s.groupId===groupId && inSchoolYear(s.date, startYear) && sessionHasRollCall(s.id))
     .sort((a,b)=> a.date.localeCompare(b.date));
-  const members = [...data.members.filter(m=>m.groupId===groupId)].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
+  const members = [...data.members.filter(m=>m.groupId===groupId && isMemberVisibleInSessions(m, sessions))].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
   if(sessions.length===0 || members.length===0){
     showToast('Pas assez de données (séances validées ou pratiquants) pour générer ce suivi');
     return;
@@ -3432,7 +3637,7 @@ function convocResponseLink(token){
 }
 
 function categoriesAvailable(){
-  const present = new Set(data.members.map(m=>computeCategory(m.birthDate)).filter(Boolean));
+  const present = new Set(data.members.filter(m=>!m.archived).map(m=>computeCategory(m.birthDate)).filter(Boolean));
   const ordered = [];
   (data.settings.ageBands||[]).forEach(b=>{
     const span = b.maxAge - b.minAge + 1;
@@ -3490,10 +3695,10 @@ function groupedCategoryLabel(birthDate){
 function groupedCategoriesAvailable(){
   const labels = [];
   (data.settings.ageBands||[]).forEach(b=>{
-    const hasAny = data.members.some(m=>groupedCategoryLabel(m.birthDate)===b.label);
+    const hasAny = data.members.some(m=>!m.archived && groupedCategoryLabel(m.birthDate)===b.label);
     if(hasAny && !labels.includes(b.label)) labels.push(b.label);
   });
-  if(data.members.some(m=>veteranLabelForMember(m))) labels.push('Vétérans');
+  if(data.members.some(m=>!m.archived && veteranLabelForMember(m))) labels.push('Vétérans');
   return labels;
 }
 function memberMatchesGroupedCategory(member, groupLabel){
@@ -3754,7 +3959,7 @@ function renderConvocTab(){
   if(ui.convocCategory && (ui.convocCategory==='all' || cats.includes(ui.convocCategory))) categoryValue = ui.convocCategory;
   ui.convocCategory = categoryValue;
 
-  const membersRaw = categoryValue==='all' ? data.members : data.members.filter(m=>memberMatchesGroupedCategory(m, categoryValue));
+  const membersRaw = categoryValue==='all' ? data.members.filter(m=>!m.archived) : data.members.filter(m=>!m.archived && memberMatchesGroupedCategory(m, categoryValue));
   const members = categoryValue==='all'
     ? sortMembersByCategoryThenName(membersRaw)
     : [...membersRaw].sort((a,b)=> memberSurname(a.name).localeCompare(memberSurname(b.name), 'fr'));
@@ -4632,7 +4837,7 @@ function renderResultsTab(){
 
   document.getElementById('downloadEventPdfBtn').onclick = generateEventResultsPdf;
   document.getElementById('shareSocialVisualBtn').onclick = ()=> generateSocialMediaVisual(ui.resultsEventId);
-  document.getElementById('downloadPalmaresPdfBtn').onclick = generateMemberPalmaresPdf;
+  document.getElementById('downloadPalmaresPdfBtn').onclick = ()=> generateMemberPalmaresPdf();
   document.getElementById('generateRecapPdfBtn').onclick = generateMonthlyRecapPdf;
   document.getElementById('generateAnnualRecapBtn').onclick = generateAnnualRecapPdf;
   document.getElementById('generateAGReportBtn').onclick = generateAGReportPdf;
@@ -4715,7 +4920,7 @@ function renderStageForm(){
   input.addEventListener('input', ()=>{
     const q = input.value.trim().toLowerCase();
     if(!q){ wrap.innerHTML=''; wrap.classList.remove('show'); return; }
-    const matches = data.members.filter(m=>m.name.toLowerCase().includes(q)).slice(0,8);
+    const matches = data.members.filter(m=>!m.archived && m.name.toLowerCase().includes(q)).slice(0,8);
     wrap.innerHTML = matches.map(m=>{
       const g = data.groups.find(x=>x.id===m.groupId);
       return `<div class="convoc-row" data-action="pick-stage-member" data-id="${m.id}" style="cursor:pointer;">
@@ -4985,7 +5190,7 @@ function initAddResultMemberAutocomplete(){
     ui.addResultMatchedMemberId = null;
     const q = input.value.trim().toLowerCase();
     if(!q){ wrap.innerHTML=''; wrap.classList.remove('show'); refreshAddResultWeightField(); refreshAddResultQualification(); return; }
-    const matches = data.members.filter(m=>m.name.toLowerCase().includes(q)).slice(0,8);
+    const matches = data.members.filter(m=>!m.archived && m.name.toLowerCase().includes(q)).slice(0,8);
     wrap.innerHTML = matches.map(m=>{
       const g = data.groups.find(x=>x.id===m.groupId);
       return `<div class="convoc-row" data-action="pick-add-result-member" data-id="${m.id}" style="cursor:pointer;">
@@ -5335,12 +5540,16 @@ function renderPalmares(){
     </div>`).join('') : '');
 }
 
-async function generateMemberPalmaresPdf(){
+// memberId est optionnel : si absent, on reprend l'élève actuellement sélectionné dans la
+// recherche de l'onglet Résultats (comportement historique du bouton de cet onglet). Le bouton
+// « Historique PDF » de la fiche élève (onglet Cours) passe désormais son propre id explicitement.
+async function generateMemberPalmaresPdf(memberId){
   if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
     showToast('La génération de PDF n’a pas pu se charger — vérifie ta connexion');
     return;
   }
-  const m = data.members.find(x=>x.id===ui.resultsSelectedMemberId);
+  const targetId = (typeof memberId === 'string' && memberId) ? memberId : ui.resultsSelectedMemberId;
+  const m = data.members.find(x=>x.id===targetId);
   if(!m){ showToast('Choisis d’abord un élève dans la recherche'); return; }
   const rows = [];
   (data.convocEvents||[]).forEach(ev=>{
@@ -6416,14 +6625,16 @@ async function generateAnnualRecapPdf(){
 function computeAGReportData(){
   const seasonYear = data.settings.seasonStartYear || autoSeasonStartYear();
 
-  // Effectifs
-  const totalMembers = data.members.length;
-  const byGroup = data.groups.map(g=>({ name:g.name, count: data.members.filter(m=>m.groupId===g.id).length }));
-  const genderF = data.members.filter(m=>m.gender==='F').length;
-  const genderM = data.members.filter(m=>m.gender==='M').length;
+  // Effectifs (élèves actuellement actifs uniquement — les élèves archivés en cours de saison
+  // restent comptabilisés dans les statistiques de présence ci-dessous, mais plus dans l'effectif)
+  const activeMembers = data.members.filter(m=>!m.archived);
+  const totalMembers = activeMembers.length;
+  const byGroup = data.groups.map(g=>({ name:g.name, count: activeMembers.filter(m=>m.groupId===g.id).length }));
+  const genderF = activeMembers.filter(m=>m.gender==='F').length;
+  const genderM = activeMembers.filter(m=>m.gender==='M').length;
   const genderNR = totalMembers - genderF - genderM;
   const byCategoryMap = {};
-  data.members.forEach(m=>{
+  activeMembers.forEach(m=>{
     const label = groupedCategoryLabel(m.birthDate) || 'Non renseignée';
     byCategoryMap[label] = (byCategoryMap[label]||0) + 1;
   });
@@ -6435,7 +6646,7 @@ function computeAGReportData(){
   let sumPresent = 0, sumSlots = 0, totalSessions = 0;
   const byGroupAttendance = data.groups.map(g=>{
     const sessions = data.sessions.filter(s=>s.groupId===g.id && inSchoolYear(s.date, seasonYear) && sessionHasRollCall(s.id));
-    const members = data.members.filter(m=>m.groupId===g.id);
+    const members = data.members.filter(m=>m.groupId===g.id && isMemberVisibleInSessions(m, sessions));
     let present = 0;
     members.forEach(m=>{ present += sessions.filter(s=>isPresent((data.attendance[s.id]||{})[m.id])).length; });
     const slots = sessions.length * members.length;
@@ -6811,8 +7022,9 @@ function archiveCurrentSeason(){
   const defaultName = schoolYearLabel(data.settings.seasonStartYear || autoSeasonStartYear());
   const name = prompt('Nom de cette saison (ex. 2025-2026) :', defaultName);
   if(!name || !name.trim()) return;
-  if(!confirm(`Archiver la saison « ${name.trim()} » puis TOUT vider (groupes, élèves, présences, convocations, résultats, stages) pour repartir sur une page vierge ?\n\nAssure-toi d'avoir fait un export Excel si besoin avant de continuer.`)) return;
+  if(!confirm(`Archiver la saison « ${name.trim()} » puis vider les présences, convocations, résultats, stages et passages de grade validés pour repartir sur une nouvelle saison ?\n\nLes cours (groupes) ET les élèves resteront intacts et visibles dans l'onglet « Cours » — cette saison reste aussi consultable dans l'onglet Archives.\n\nAssure-toi d'avoir fait un export Excel si besoin avant de continuer.`)) return;
 
+  const validatedPassages = (data.beltPassages||[]).filter(p=>p.printed);
   const snapshot = {
     id: uid(),
     name: name.trim(),
@@ -6824,6 +7036,7 @@ function archiveCurrentSeason(){
     attendance: JSON.parse(JSON.stringify(data.attendance)),
     convocEvents: JSON.parse(JSON.stringify(data.convocEvents||[])),
     stages: JSON.parse(JSON.stringify(data.stages||[])),
+    beltPassages: JSON.parse(JSON.stringify(validatedPassages)),
     settings: {
       ageBands: JSON.parse(JSON.stringify(data.settings.ageBands||[])),
       seasonStartYear: data.settings.seasonStartYear || autoSeasonStartYear()
@@ -6832,12 +7045,18 @@ function archiveCurrentSeason(){
   data.archivedSeasons = data.archivedSeasons || [];
   data.archivedSeasons.push(snapshot);
 
-  data.groups = [];
-  data.members = [];
+  // Les cours (groupes) ET les élèves restent dans l'onglet « Cours » d'une saison à l'autre —
+  // ils sont enregistrés dans le snapshot ci-dessus pour l'historique (consultable dans
+  // l'onglet Archives), mais ne sont pas supprimés de l'app : le coach n'a pas à recréer les
+  // cours ni à réimporter tout l'effectif à chaque nouvelle saison. Seules les données propres
+  // à la saison écoulée (séances/présences, convocations, résultats, stages) sont remises à zéro.
+  // Les passages de grade déjà validés (imprimés) sont archivés puis retirés de la liste active ;
+  // ceux encore en attente de validation restent dans l'app pour la nouvelle saison.
   data.sessions = [];
   data.attendance = {};
   data.convocEvents = [];
   data.stages = [];
+  data.beltPassages = (data.beltPassages||[]).filter(p=>!p.printed);
 
   saveData();
   ui.groupsExpanded = {};
@@ -6919,6 +7138,50 @@ function mountArchiveGroupHandlers(archive, aid){
       if(!ui.archiveGroupSearch) ui.archiveGroupSearch = {};
       ui.archiveGroupSearch[aid] = input.value;
       refreshArchiveGroupBody(archive, aid);
+    });
+  }
+}
+
+/* ---- Onglet Passages de grade ---- */
+function buildArchiveGradesShellHtml(archive, aid){
+  if(!ui.archiveGradesSearch) ui.archiveGradesSearch = {};
+  return `
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="archiveGradesSearch-${aid}" placeholder="🔍 Rechercher un élève..." value="${escapeHtml(ui.archiveGradesSearch[aid]||'')}">
+    </div>
+    <div id="archiveGradesBody-${aid}" style="margin-top:8px;"></div>
+  `;
+}
+function renderArchiveGradesBody(archive, aid){
+  if(!ui.archiveGradesSearch) ui.archiveGradesSearch = {};
+  const query = (ui.archiveGradesSearch[aid]||'').trim().toLowerCase();
+  const passages = [...(archive.beltPassages||[])].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const filtered = query ? passages.filter(p=>(p.memberName||'').toLowerCase().includes(query)) : passages;
+  if(filtered.length===0){
+    return query ? '<div class="empty">Aucun élève trouvé.</div>' : '<div class="empty">Aucun passage de grade validé archivé pour cette saison.</div>';
+  }
+  return filtered.map(p=>`
+    <div class="member-chip">
+      <span>${nameWithBoldSurname(p.memberName||'')}${p.groupName?`<span class="tag">${escapeHtml(p.groupName)}</span>`:''}</span>
+      <span style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+        ${p.belt?beltSwatchHtml(p.belt,true):''}
+        <span style="font-size:12px; color:var(--ink-dim);">${p.date?fmtDate(p.date):''}</span>
+      </span>
+    </div>`).join('');
+}
+function refreshArchiveGradesBody(archive, aid){
+  const body = document.getElementById(`archiveGradesBody-${aid}`);
+  if(!body) return;
+  body.innerHTML = renderArchiveGradesBody(archive, aid);
+}
+function mountArchiveGradesHandlers(archive, aid){
+  refreshArchiveGradesBody(archive, aid);
+  const input = document.getElementById(`archiveGradesSearch-${aid}`);
+  if(input){
+    input.addEventListener('input', ()=>{
+      if(!ui.archiveGradesSearch) ui.archiveGradesSearch = {};
+      ui.archiveGradesSearch[aid] = input.value;
+      refreshArchiveGradesBody(archive, aid);
     });
   }
 }
@@ -7179,7 +7442,8 @@ function renderArchiveTabsShellHtml(archive){
     { key:'groupe', label:'Groupe' },
     { key:'presence', label:'Présence' },
     { key:'resultats', label:'Résultats & médailles' },
-    { key:'palmares', label:'Palmarès' }
+    { key:'palmares', label:'Palmarès' },
+    { key:'grades', label:'Passages de grade' }
   ];
   return `
     <div class="row" style="margin-top:12px; flex-wrap:wrap; gap:6px;">
@@ -7201,6 +7465,7 @@ function refreshArchiveTabBody(archive){
   else if(activeTab==='presence'){ body.innerHTML = buildArchivePresenceShellHtml(archive, aid); mountArchivePresenceHandlers(archive, aid); }
   else if(activeTab==='resultats'){ body.innerHTML = renderArchiveResultsShellHtml(archive, aid); mountArchiveResultsHandlers(archive, aid); }
   else if(activeTab==='palmares'){ body.innerHTML = buildArchivePalmaresShellHtml(archive, aid); mountArchivePalmaresHandlers(archive, aid); }
+  else if(activeTab==='grades'){ body.innerHTML = buildArchiveGradesShellHtml(archive, aid); mountArchiveGradesHandlers(archive, aid); }
 }
 
 function renderArchiveCard(){
@@ -7210,7 +7475,7 @@ function renderArchiveCard(){
   if(!ui.archiveExpanded) ui.archiveExpanded = {};
   wrap.innerHTML = `
     <h2>Archives de saison</h2>
-    <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">Archiver la saison en cours enregistre une photo de toutes les données actuelles (groupes, élèves, présences, convocations, résultats, stages) puis vide l'application pour repartir sur une nouvelle saison. Les archives restent uniquement sur cet appareil — pense à les exporter si tu changes d'ordinateur.</p>
+    <p style="font-size:12.5px; color:var(--ink-dim); margin:-6px 0 12px; line-height:1.5;">Archiver la saison en cours enregistre une photo de toutes les données actuelles (groupes, élèves, présences, convocations, résultats, stages, passages de grade validés), consultable ensuite dans l'onglet Archives, puis vide les présences, convocations, résultats, stages et passages de grade validés pour repartir sur une nouvelle saison. Les cours (groupes) et les élèves restent inchangés dans l'onglet « Cours » ; les passages de grade pas encore validés restent aussi en attente. Les archives restent uniquement sur cet appareil — pense à les exporter si tu changes d'ordinateur.</p>
     <button class="danger" id="archiveSeasonBtn" style="width:100%;">Archiver la saison en cours et tout vider</button>
     <button class="ghost" id="importArchiveBtn" style="width:100%; margin-top:8px;">Importer une archive (.json)</button>
     <input type="file" id="importArchiveInput" accept=".json" style="display:none">
@@ -7221,7 +7486,7 @@ function renderArchiveCard(){
         <div class="group-title-row" data-action="toggle-archive" data-id="${a.id}" style="cursor:pointer;">
           <div>
             <div class="name">${escapeHtml(a.name)}</div>
-            <div class="meta">Archivée le ${fmtDate(a.archivedAt)} · ${a.groups.length} cours · ${a.members.length} élèves</div>
+            <div class="meta">Archivée le ${fmtDate(a.archivedAt)} · ${a.groups.length} cours · ${a.members.length} élèves${(a.beltPassages||[]).length ? ` · ${(a.beltPassages||[]).length} passage${(a.beltPassages||[]).length===1?'':'s'} de grade` : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:6px;">
             <button class="ghost icon-btn" data-action="export-archive" data-id="${a.id}" title="Exporter cette archive (.json)" style="padding:7px 8px;">${ICON_PDF}</button>
@@ -7344,7 +7609,7 @@ function initCoursSearch(){
   input.addEventListener('input', ()=>{
     const q = input.value.trim().toLowerCase();
     if(!q){ wrap.innerHTML=''; wrap.classList.remove('show'); return; }
-    const matches = data.members.filter(m=>m.name.toLowerCase().includes(q)).slice(0,10);
+    const matches = data.members.filter(m=>!m.archived && m.name.toLowerCase().includes(q)).slice(0,10);
     if(matches.length===0){
       wrap.innerHTML = '<div class="empty" style="padding:12px;">Aucun élève trouvé.</div>';
     } else {
