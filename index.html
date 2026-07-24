@@ -883,6 +883,24 @@ function ensureSettings(){
   if(!data.settings.competitionProfiles) data.settings.competitionProfiles = {};
   data.convocEvents.forEach(ev=>{ if(ev.archived===undefined) ev.archived = false; });
   data.groups.forEach(g=>{ g.recurrence ||= []; });
+  // Suivi des suppressions à répercuter sur le classeur Google Sheets : depuis que la sauvegarde
+  // en ligne fusionne au lieu d'écraser (pour ne pas perdre les données saisies en parallèle par
+  // un autre appareil), une ligne supprimée localement ne disparaît plus jamais du classeur toute
+  // seule — il faut explicitement lui dire quels ids supprimer. Cette liste est envoyée à chaque
+  // sauvegarde puis vidée une fois l'envoi réussi.
+  if(!data.deletedIds || typeof data.deletedIds !== 'object') data.deletedIds = {};
+  ['groups','members','sessions','beltPassages','calendarEvents','convocEvents','archivedSeasons','stages'].forEach(k=>{
+    if(!Array.isArray(data.deletedIds[k])) data.deletedIds[k] = [];
+  });
+}
+// À appeler juste avant de retirer un élément d'un tableau identifié par id (groups, members,
+// sessions, beltPassages, calendarEvents, convocEvents, archivedSeasons), pour que la suppression
+// soit bien répercutée sur le classeur Google Sheets à la prochaine sauvegarde.
+function markDeleted(entity, id){
+  if(!id) return;
+  if(!data.deletedIds || typeof data.deletedIds !== 'object') data.deletedIds = {};
+  if(!Array.isArray(data.deletedIds[entity])) data.deletedIds[entity] = [];
+  if(!data.deletedIds[entity].includes(id)) data.deletedIds[entity].push(id);
 }
 function ensureKnownRecurrence(){
   const knownSchedules = {
@@ -904,7 +922,7 @@ function cleanupUnvalidatedSessions(){
   if(toRemove.length){
     const removeSet = new Set(toRemove);
     data.sessions = data.sessions.filter(s=>!removeSet.has(s.id));
-    toRemove.forEach(id=>delete data.attendance[id]);
+    toRemove.forEach(id=>{ delete data.attendance[id]; markDeleted('sessions', id); });
   }
   data.settings[flag] = true;
   return toRemove.length > 0;
@@ -1130,6 +1148,11 @@ async function saveData(){
       headers:{ 'Content-Type':'text/plain;charset=utf-8' },
       body: JSON.stringify(data)
     });
+    // Les suppressions en attente viennent d'être envoyées et appliquées côté classeur : on vide
+    // la liste pour ne pas la renvoyer indéfiniment. Si l'envoi échoue (catch ci-dessous), on la
+    // garde pour réessayer à la prochaine sauvegarde.
+    data.deletedIds = { groups:[], members:[], sessions:[], beltPassages:[], calendarEvents:[], convocEvents:[], archivedSeasons:[], stages:[] };
+    try{ localStorage.setItem('dojo-data', JSON.stringify(data)); }catch(e){}
   }catch(e){
     showToast('Sauvegarde en ligne impossible — gardée en local seulement');
   } finally {
@@ -1349,6 +1372,7 @@ document.getElementById('groups-list').addEventListener('click', e=>{
     generateMemberPalmaresPdf(btn.dataset.id);
   } else if(action==='del-member'){
     if(!confirm('Retirer ce pratiquant du cours ?')) return;
+    markDeleted('members', btn.dataset.id);
     data.members = data.members.filter(x=>x.id!==btn.dataset.id);
     saveData(); renderAll();
   } else if(action==='add-member'){
@@ -1599,6 +1623,7 @@ function renderBeltDiplomasSection(){
   wrap.querySelectorAll('[data-action="remove-belt-diploma"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(!confirm('Retirer ce diplôme de la liste à imprimer ? (la ceinture obtenue reste enregistrée sur la fiche de l’élève)')) return;
+      markDeleted('beltPassages', btn.dataset.id);
       data.beltPassages = (data.beltPassages||[]).filter(p=>p.id!==btn.dataset.id);
       saveData();
       renderBeltDiplomasSection();
@@ -2275,6 +2300,7 @@ function renderImportedCompetitionsSettings(){
   wrap.querySelectorAll('[data-action="delete-manual-event"]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       if(!confirm('Supprimer cet événement du calendrier ?')) return;
+      markDeleted('calendarEvents', btn.dataset.id);
       data.calendarEvents = (data.calendarEvents||[]).filter(e=>e.id!==btn.dataset.id);
       saveData();
       renderImportedCompetitionsSettings();
@@ -2710,6 +2736,7 @@ function mergeDuplicateMembersWithinGroups(){
           }
         });
         ['birthDate','email','gender','belt'].forEach(f=>{ if(!canonical[f] && dup[f]) canonical[f] = dup[f]; });
+        markDeleted('members', dup.id);
         data.members = data.members.filter(x=>x.id!==dup.id);
         mergedCount++;
       });
@@ -2741,6 +2768,7 @@ function mergeDuplicateGroups(){
     duplicates.forEach(dup=>{
       data.members.forEach(m=>{ if(m.groupId===dup.id){ m.groupId = canonical.id; movedMembersCount++; } });
       data.sessions.forEach(s=>{ if(s.groupId===dup.id) s.groupId = canonical.id; });
+      markDeleted('groups', dup.id);
       data.groups = data.groups.filter(x=>x.id!==dup.id);
       mergedGroupsCount++;
     });
@@ -2906,6 +2934,7 @@ function renderPresenceSheet(){
   }
   document.getElementById('deleteSessionBtn').addEventListener('click', ()=>{
     if(!confirm('Supprimer cette séance et les présences associées ?')) return;
+    markDeleted('sessions', session.id);
     data.sessions = data.sessions.filter(s=>s.id!==session.id);
     delete data.attendance[session.id];
     ui.presenceSessionId = null;
@@ -5993,6 +6022,7 @@ function renderConvocCurrent(){
       e.stopPropagation();
       const ev = data.convocEvents.find(x=>x.id===btn.dataset.id);
       if(!confirm(`Supprimer l'historique « ${ev?ev.name:''} » ? Cette action est irréversible.`)) return;
+      markDeleted('convocEvents', btn.dataset.id);
       data.convocEvents = data.convocEvents.filter(x=>x.id!==btn.dataset.id);
       saveData();
       renderConvocCurrent();
@@ -7164,6 +7194,10 @@ function archiveCurrentSeason(){
   // à la saison écoulée (séances/présences, convocations, résultats, stages) sont remises à zéro.
   // Les passages de grade déjà validés (imprimés) sont archivés puis retirés de la liste active ;
   // ceux encore en attente de validation restent dans l'app pour la nouvelle saison.
+  data.sessions.forEach(s=>markDeleted('sessions', s.id));
+  data.convocEvents.forEach(ev=>markDeleted('convocEvents', ev.id));
+  validatedPassages.forEach(p=>markDeleted('beltPassages', p.id));
+  (data.stages||[]).forEach(s=>markDeleted('stages', s.id));
   data.sessions = [];
   data.attendance = {};
   data.convocEvents = [];
@@ -7633,6 +7667,7 @@ function renderArchiveCard(){
       e.stopPropagation();
       const a = (data.archivedSeasons||[]).find(x=>x.id===btn.dataset.id);
       if(!confirm(`Supprimer définitivement l’archive « ${a?a.name:''} » ? Cette action est irréversible.`)) return;
+      markDeleted('archivedSeasons', btn.dataset.id);
       data.archivedSeasons = (data.archivedSeasons||[]).filter(x=>x.id!==btn.dataset.id);
       saveData();
       renderArchiveCard();
