@@ -405,6 +405,15 @@
   }
   #quick-add-overlay .qam-warn{ font-size:12px; color:#E08A3C; margin:-6px 0 4px; }
 
+  #birthday-overlay{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:130; padding:16px; overflow:auto; }
+  #birthday-overlay.show{ display:flex; align-items:center; justify-content:center; }
+  #birthday-overlay .bday-card{ background:var(--surface); border:2px solid var(--tatami); border-radius:16px; padding:26px 24px; max-width:420px; width:100%; box-shadow:0 14px 50px rgba(0,0,0,.35); text-align:center; }
+  #birthday-overlay .bday-emoji{ font-size:44px; line-height:1; margin-bottom:10px; }
+  #birthday-overlay .bday-title{ font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:22px; color:var(--ink); margin-bottom:12px; }
+  #birthday-overlay .bday-names{ margin:0 0 18px; }
+  #birthday-overlay .bday-name-row{ font-size:16px; font-weight:600; color:var(--tatami); padding:4px 0; }
+  #birthday-overlay button{ width:100%; }
+
   .archived-suggest{ display:none; position:absolute; left:0; right:0; top:100%; margin-top:4px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); z-index:30; max-height:260px; overflow:auto; }
   .archived-suggest.show{ display:block; }
   .archived-suggest-item{ padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:2px; }
@@ -494,6 +503,7 @@
     background: var(--surface-2); border:1px solid var(--tatami); color:var(--ink);
     padding:9px 16px; border-radius:20px; font-size:13px; z-index:50; opacity:0;
     transition: opacity .25s ease; pointer-events:none;
+    max-width:90vw; text-align:center; white-space:normal;
   }
   .toast.show{ opacity:1; }
   .settings-foot{ text-align:center; margin-top:22px; }
@@ -510,7 +520,13 @@
   </div>
   <div class="eyebrow">Suivi des présences</div>
   <input class="club-name" id="clubName" placeholder="Nom du club" maxlength="60">
-  <div id="headerSeasonLabel" style="font-size:11px; color:var(--ink-dim); margin-top:2px; font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:0.03em;"></div>
+  <div class="header-bottom-row" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:2px; position:relative;">
+    <div id="headerSeasonLabel" style="font-size:11px; color:var(--ink-dim); font-family:'Rajdhani',sans-serif; font-weight:700; letter-spacing:0.03em; flex-shrink:0;"></div>
+    <div style="position:relative; flex:1; max-width:170px; min-width:80px;">
+      <input type="text" id="globalSearchInput" placeholder="🔍 Rechercher un élève..." style="width:100%; font-size:11.5px; padding:6px 10px; border-radius:20px; background:var(--surface-2); border:1px solid var(--line); color:var(--ink);">
+      <div id="globalSearchResults" class="global-search-results" style="left:auto; right:0; width:280px;"></div>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -521,11 +537,6 @@
   </section>
 
   <section id="tab-groupes">
-    <div class="card" style="margin-top:10px; position:relative;">
-      <h2>Rechercher un élève</h2>
-      <input type="text" id="coursSearchInput" placeholder="🔍 Nom du pratiquant...">
-      <div id="coursSearchResults" class="global-search-results"></div>
-    </div>
     <div class="card" id="groups-list"></div>
     <div id="belt-passage-section"></div>
     <div id="belt-diplomas-section"></div>
@@ -764,6 +775,7 @@
 <div id="import-archive-overlay"></div>
 <div id="import-missing-overlay"></div>
 <div id="quick-add-overlay"></div>
+<div id="birthday-overlay"></div>
 <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -865,11 +877,44 @@ function fmtDate(s){
   if(isNaN(d.getTime())) return '';
   return d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
 }
-function showToast(msg){
+function showToast(msg, duration){
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h);
-  t._h = setTimeout(()=>t.classList.remove('show'), 1800);
+  t._h = setTimeout(()=>t.classList.remove('show'), duration || 1800);
+}
+
+// Anniversaires du jour, tous cours confondus (hors élèves archivés) — utilisé à l'ouverture
+// d'une séance, quel que soit le cours ouvert.
+function birthdayMembersForDate(dateStr){
+  if(!dateStr || dateStr.length<10) return [];
+  const monthDay = dateStr.slice(5,10); // "MM-DD"
+  return data.members.filter(m=>!m.archived && m.birthDate && m.birthDate.length>=10 && m.birthDate.slice(5,10)===monthDay);
+}
+function showBirthdayNotificationForDate(dateStr){
+  const celebrants = birthdayMembersForDate(dateStr);
+  if(celebrants.length===0) return;
+  openBirthdayOverlay(celebrants);
+}
+// Fenêtre à fermer explicitement (plutôt qu'un toast qui disparaît tout seul) pour être sûr que
+// le coach voit bien l'anniversaire avant de continuer l'appel.
+function openBirthdayOverlay(celebrants){
+  const overlay = document.getElementById('birthday-overlay');
+  const title = celebrants.length===1 ? "C'est l'anniversaire de..." : "Ce sont les anniversaires de...";
+  overlay.innerHTML = `
+    <div class="bday-card">
+      <div class="bday-emoji">🎂</div>
+      <div class="bday-title">${escapeHtml(title)}</div>
+      <div class="bday-names">
+        ${celebrants.map(m=>`<div class="bday-name-row">🎉 ${escapeHtml(m.name)}</div>`).join('')}
+      </div>
+      <button class="primary" id="closeBirthdayOverlayBtn">Fermer et faire l'appel</button>
+    </div>`;
+  overlay.classList.add('show');
+  document.getElementById('closeBirthdayOverlayBtn').onclick = ()=>{
+    overlay.classList.remove('show');
+    overlay.innerHTML = '';
+  };
 }
 
 /* ---------------- CATÉGORIES D'ÂGE ---------------- */
@@ -3245,6 +3290,8 @@ function renderPresencesTab(){
     ui.presenceSessionId = session.id;
     renderPresenceSheet();
     renderPresenceHistory();
+    // Anniversaires du jour, tous cours confondus — pas seulement celui qu'on vient d'ouvrir.
+    showBirthdayNotificationForDate(date);
   });
   renderPresenceHistory();
   if(ui.presenceSessionId){ renderPresenceSheet(); } else { document.getElementById('presence-sheet').style.display='none'; }
@@ -8204,9 +8251,9 @@ footer.querySelector('#resetBtn').addEventListener('click', async ()=>{
   showToast('Toutes les données ont été réinitialisées');
 });
 /* ---------------- RECHERCHE GLOBALE ---------------- */
-function initCoursSearch(){
-  const input = document.getElementById('coursSearchInput');
-  const wrap = document.getElementById('coursSearchResults');
+function initGlobalSearch(){
+  const input = document.getElementById('globalSearchInput');
+  const wrap = document.getElementById('globalSearchResults');
   if(!input || !wrap) return;
   input.addEventListener('input', ()=>{
     const q = input.value.trim().toLowerCase();
@@ -8243,16 +8290,18 @@ function initCoursSearch(){
     if(input.value.trim()) wrap.classList.add('show');
   });
 }
-initCoursSearch();
+initGlobalSearch();
 initCalendarCompetitionPicker();
 
 function goToMemberFiche(memberId, groupId){
   if(!groupId) return;
   ui.groupsExpanded[groupId] = true;
   ui.memberFicheExpanded[memberId] = true;
-  document.getElementById('coursSearchResults').classList.remove('show');
-  document.getElementById('coursSearchInput').value = '';
-  renderGroupsTab();
+  document.getElementById('globalSearchResults').classList.remove('show');
+  document.getElementById('globalSearchInput').value = '';
+  // La recherche est accessible depuis n'importe quel onglet — on bascule vers Cours pour
+  // afficher la fiche trouvée, même si on cherchait depuis Présences, Convoc., etc.
+  switchTab('groupes');
   setTimeout(()=>{
     const el = document.querySelector(`[data-action="toggle-member-fiche"][data-id="${memberId}"]`);
     if(el){
